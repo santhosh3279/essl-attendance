@@ -139,7 +139,7 @@
     <ul><li>3.1 Create the admin account</li><li>3.2 Add your terminals</li><li>3.3 Map enrollment numbers to employees</li></ul>
   </li>
   <li><b>4. Daily use</b>
-    <ul><li>4.1 Dashboard</li><li>4.2 Attendance</li><li>4.3 Punch log</li><li>4.4 Exporting to Excel</li></ul>
+    <ul><li>4.1 Dashboard</li><li>4.2 Attendance</li><li>4.3 Punch log</li><li>4.4 Exporting to Excel</li><li>4.5 Hours chart</li></ul>
   </li>
   <li><b>5. Managing users</b>
     <ul><li>5.1 Roles</li><li>5.2 Adding and removing accounts</li><li>5.3 Passwords</li></ul>
@@ -424,6 +424,25 @@ to see the raw evidence.</p>
 <p>Both the Attendance and Punch log tabs have an <b>Export CSV</b> button. The file
 downloads with the current filters applied and opens directly in Excel or LibreOffice.
 Viewer accounts can export too.</p>
+
+<h3>4.5 Hours chart</h3>
+
+<p>The <b>Hours Chart</b> tab draws working hours as a bar chart.</p>
+
+<ul>
+  <li>Pick an <b>employee</b> and each bar is one day, so a person's week is visible at
+  a glance.</li>
+  <li>Leave the employee on <b>All</b> and each bar is one person's total hours over the
+  range, sorted highest first &mdash; useful for a monthly comparison.</li>
+</ul>
+
+<p>A dashed outline instead of a solid bar means that day has only one punch, so the
+hours cannot be worked out. That is deliberately different from zero: absent and
+forgot-to-punch-out are not the same thing, and a chart that showed both as nothing
+would be misleading. The dashed horizontal line marks a standard working day.</p>
+
+<p><b>Show data table</b> puts the same figures in a table underneath &mdash; use it to
+copy numbers out, or if the colours are hard to read.</p>
 
 <h2>5. Managing users</h2>
 

@@ -324,3 +324,73 @@ dialog input, dialog select { width: 100%; }
 }
 
 [hidden] { display: none !important; }
+
+/* ---------- hours chart ----------
+   Palette roles from the data-viz reference instance. Dark steps are chosen for
+   the dark surface and validated against it, not flipped from the light ones. */
+.viz-root {
+  color-scheme: light;
+  --surface-1: var(--panel);
+  --viz-grid: #e6e6e3;
+  --viz-axis: #d2d2ce;
+  --viz-text: var(--text);
+  --viz-muted: var(--muted);
+  --series-1: #2a78d6;   /* validated: contrast >= 3:1 on light surface */
+  margin: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) .viz-root {
+    color-scheme: dark;
+    --viz-grid: #2e2e2b;
+    --viz-axis: #3c3c38;
+    --series-1: #3987e5;  /* re-stepped for the dark surface, not the same hex */
+  }
+}
+:root[data-theme="dark"] .viz-root {
+  color-scheme: dark;
+  --viz-grid: #2e2e2b;
+  --viz-axis: #3c3c38;
+  --series-1: #3987e5;
+}
+
+.viz-caption { color: var(--viz-muted); font-size: 12px; margin-bottom: 10px; }
+.viz-plot { width: 100%; overflow-x: auto; }
+#repChart { display: block; width: 100%; height: 340px; min-width: 520px; }
+
+.viz-grid-line { stroke: var(--viz-grid); stroke-width: 1; shape-rendering: crispEdges; }
+.viz-axis-line { stroke: var(--viz-axis); stroke-width: 1; shape-rendering: crispEdges; }
+.viz-tick { fill: var(--viz-muted); font-size: 11px; }
+.viz-axis-title { fill: var(--viz-muted); font-size: 11px; letter-spacing: .3px; }
+
+/* Text wears text tokens, never the series colour. */
+.viz-value { fill: var(--viz-text); font-size: 10px; font-weight: 600; }
+
+.viz-bar { fill: var(--series-1); }
+/* Incomplete days carry an outline instead of a fill: the difference is shape,
+   not just colour, so it survives greyscale and colour-blind viewing. */
+.viz-bar-open { fill: none; stroke: var(--series-1); stroke-width: 1.5; stroke-dasharray: 3 2; }
+.viz-bar-hit { fill: transparent; cursor: pointer; }
+.viz-bar-hit:hover + .viz-bar-mark, .viz-bar-hit:focus + .viz-bar-mark { opacity: .78; }
+.viz-target { stroke: var(--viz-muted); stroke-width: 1; stroke-dasharray: 4 3; }
+
+.viz-legend { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px; font-size: 12px; color: var(--viz-muted); }
+.viz-legend span { display: inline-flex; align-items: center; margin-right: 18px; }
+.viz-swatch { display: inline-block; width: 11px; height: 11px; margin-right: 6px; border-radius: 2px; background: var(--series-1); vertical-align: middle; }
+.viz-swatch.open { background: none; border: 1.5px dashed var(--series-1); }
+.viz-swatch.target { width: 16px; height: 0; border: 0; border-top: 1px dashed var(--muted); border-radius: 0; }
+
+.viz-tooltip {
+  position: fixed;
+  z-index: 60;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(0,0,0,.18);
+  padding: 8px 10px;
+  font-size: 12px;
+  pointer-events: none;
+  max-width: 240px;
+}
+.viz-tooltip b { display: block; margin-bottom: 2px; }
+.viz-empty { padding: 40px; text-align: center; color: var(--muted); }

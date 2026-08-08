@@ -31,6 +31,7 @@
       <button data-view="mappings">Mapping</button>
       <button data-view="attendance">Attendance</button>
       <button data-view="punches">Punch Log</button>
+      <button data-view="report">Hours Chart</button>
       <button data-view="synclog">Sync Log</button>
       <button data-view="users" data-admin hidden>Users</button>
     </nav>
@@ -124,6 +125,37 @@
         <button class="btn ghost" id="punchCsvBtn">Export CSV</button>
       </div>
       <div class="panel"><div class="table-wrap"><table id="punchTable"></table></div></div>
+    </section>
+
+    <!-- Hours chart -->
+    <section class="view" id="view-report">
+      <div class="toolbar">
+        <div class="field"><label for="repFrom">From</label><input type="date" id="repFrom"></div>
+        <div class="field"><label for="repTo">To</label><input type="date" id="repTo"></div>
+        <div class="field">
+          <label for="repEmployee">Employee</label>
+          <select id="repEmployee"><option value="">All — total hours each</option></select>
+        </div>
+        <button class="btn" id="repLoadBtn">Show</button>
+        <button class="btn ghost" id="repTableBtn" aria-expanded="false">Show data table</button>
+      </div>
+
+      <div class="panel">
+        <h2 id="repTitle">Working hours</h2>
+        <div class="panel-body">
+          <figure class="viz-root" id="repFigure">
+            <figcaption id="repCaption" class="viz-caption"></figcaption>
+            <div class="viz-plot"><svg id="repChart" role="img" aria-labelledby="repTitle repCaption"></svg></div>
+            <div class="viz-legend" id="repLegend"></div>
+          </figure>
+          <div id="repTooltip" class="viz-tooltip" hidden></div>
+        </div>
+      </div>
+
+      <div class="panel" id="repTablePanel" hidden>
+        <h2>Chart data</h2>
+        <div class="table-wrap"><table id="repTable"></table></div>
+      </div>
     </section>
 
     <!-- Sync log -->

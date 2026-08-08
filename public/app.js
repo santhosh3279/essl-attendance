@@ -791,10 +791,263 @@ $('#gateForm').addEventListener('submit', async (event) => {
   }
 });
 
+/* ---------- hours chart ---------- */
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const svgEl = (tag, attrs = {}) => {
+  const node = document.createElementNS(SVG_NS, tag);
+  for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, String(value));
+  return node;
+};
+
+/** Bar with a 4px rounded data-end and a square baseline, per the mark spec. */
+function barPath(x, y, width, height, radius = 4) {
+  const r = Math.max(0, Math.min(radius, width / 2, height));
+  return `M${x},${y + height} L${x},${y + r} Q${x},${y} ${x + r},${y} ` +
+    `L${x + width - r},${y} Q${x + width},${y} ${x + width},${y + r} ` +
+    `L${x + width},${y + height} Z`;
+}
+
+const chartState = { bars: [], mode: 'days', target: 8 };
+
+function repQuery() {
+  const params = new URLSearchParams({ from: $('#repFrom').value, to: $('#repTo').value });
+  if ($('#repEmployee').value) params.set('employeeId', $('#repEmployee').value);
+  return params;
+}
+
+loaders.report = async () => {
+  await refreshEmployees();
+  const select = $('#repEmployee');
+  const current = select.value;
+  select.replaceChildren(el('option', { value: '' }, 'All — total hours each'));
+  for (const employee of state.employees) {
+    select.append(el('option', { value: employee.id }, `${employee.code} — ${employee.name}`));
+  }
+  select.value = current;
+  await loadReport();
+};
+
+async function loadReport() {
+  const data = await api(`/api/attendance?${repQuery()}`);
+  const employeeId = $('#repEmployee').value;
+
+  if (employeeId) {
+    // One employee: a day per bar, hours on the value axis.
+    const rows = data.rows.filter((r) => r.employeeId === Number(employeeId));
+    chartState.mode = 'days';
+    chartState.bars = rows.map((r) => ({
+      label: r.day.slice(8) + '/' + r.day.slice(5, 7),
+      full: r.day,
+      value: r.hours,
+      status: r.status,
+      detail: r.firstIn ? `${r.firstIn} → ${r.lastOut ?? '—'}` : 'no punches',
+      punches: r.punches,
+    }));
+    $('#repTitle').textContent = `Working hours — ${rows[0]?.name ?? 'employee'}`;
+  } else {
+    // Everyone: total hours per person over the range.
+    const totals = new Map();
+    for (const row of data.rows) {
+      const entry = totals.get(row.employeeId) ?? { name: row.name, code: row.code, hours: 0, days: 0, incomplete: 0 };
+      if (row.hours) { entry.hours += row.hours; entry.days += 1; }
+      else if (row.status === 'incomplete') entry.incomplete += 1;
+      totals.set(row.employeeId, entry);
+    }
+    chartState.mode = 'employees';
+    chartState.bars = [...totals.values()]
+      .sort((a, b) => b.hours - a.hours)
+      .map((e) => ({
+        label: e.name.split(' ')[0].slice(0, 10),
+        full: `${e.code} — ${e.name}`,
+        value: e.hours ? Number(e.hours.toFixed(2)) : null,
+        status: e.hours ? 'ok' : 'incomplete',
+        detail: `${e.days} day(s) with in and out${e.incomplete ? `, ${e.incomplete} incomplete` : ''}`,
+        punches: e.days,
+      }));
+    $('#repTitle').textContent = 'Total working hours by employee';
+  }
+
+  $('#repCaption').textContent =
+    `${data.from} to ${data.to}. Hours are first punch to last punch, merged across all devices.`;
+
+  drawChart();
+  renderReportTable();
+}
+
+function drawChart() {
+  const svg = $('#repChart');
+  svg.replaceChildren();
+  const bars = chartState.bars;
+
+  if (!bars.length) {
+    $('#repLegend').replaceChildren();
+    svg.append(svgEl('text', { x: 20, y: 40, class: 'viz-tick' }));
+    svg.lastChild.textContent = 'No data for this range.';
+    return;
+  }
+
+  const width = Math.max(svg.clientWidth || 900, 520);
+  const height = 340;
+  const margin = { top: 30, right: 16, bottom: 46, left: 48 };
+  const plotW = width - margin.left - margin.right;
+  const plotH = height - margin.top - margin.bottom;
+  svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+
+  // The per-day target only means something on the per-day chart; against a
+  // range total it would sit near zero and read as a threshold nobody missed.
+  const showTarget = chartState.mode === 'days';
+  const target = chartState.target;
+  const maxValue = Math.max(showTarget ? target : 0, ...bars.map((b) => b.value ?? 0), 1);
+
+  // Round tick steps: 1.6 / 3.2 / 4.8 is nobody's idea of an axis.
+  const rough = maxValue / 5;
+  const magnitude = 10 ** Math.floor(Math.log10(rough));
+  const step = [1, 2, 2.5, 5, 10].map((m) => m * magnitude).find((s) => s >= rough) ?? 10 * magnitude;
+  const yMax = Math.ceil(maxValue / step) * step;
+  const ticks = Math.round(yMax / step);
+  const y = (value) => margin.top + plotH - (value / yMax) * plotH;
+
+  const band = plotW / bars.length;
+  const barWidth = Math.max(2, Math.min(24, band - 2)); // 2px surface gap, capped at 24
+
+  // Horizontal gridlines, hairline and recessive.
+  for (let i = 0; i <= ticks; i += 1) {
+    const value = step * i;
+    const yy = Math.round(y(value)) + 0.5;
+    svg.append(svgEl('line', {
+      x1: margin.left, x2: width - margin.right, y1: yy, y2: yy, class: 'viz-grid-line',
+    }));
+    const label = svgEl('text', { x: margin.left - 8, y: yy + 4, 'text-anchor': 'end', class: 'viz-tick' });
+    label.textContent = value % 1 ? value.toFixed(1) : String(value);
+    svg.append(label);
+  }
+
+  if (showTarget) {
+    const targetY = Math.round(y(target)) + 0.5;
+    svg.append(svgEl('line', {
+      x1: margin.left, x2: width - margin.right, y1: targetY, y2: targetY, class: 'viz-target',
+    }));
+  }
+
+  const axisTitle = svgEl('text', { x: 0, y: 11, class: 'viz-axis-title' });
+  axisTitle.textContent = 'HOURS';
+  svg.append(axisTitle);
+
+  const baseline = margin.top + plotH;
+  svg.append(svgEl('line', {
+    x1: margin.left, x2: width - margin.right, y1: baseline + 0.5, y2: baseline + 0.5, class: 'viz-axis-line',
+  }));
+
+  const labelEvery = Math.ceil(bars.length / Math.floor(plotW / 46)) || 1;
+
+  bars.forEach((bar, index) => {
+    const x = margin.left + index * band + (band - barWidth) / 2;
+
+    if (bar.value != null && bar.value > 0) {
+      const h = Math.max(2, baseline - y(bar.value));
+      svg.append(svgEl('path', { d: barPath(x, baseline - h, barWidth, h), class: 'viz-bar viz-bar-mark' }));
+    } else if (bar.status === 'incomplete') {
+      // Only one punch: hours are unknown, not zero. A dashed stub says so
+      // without pretending to a value.
+      const h = 14;
+      svg.append(svgEl('path', {
+        d: barPath(x + 0.75, baseline - h, barWidth - 1.5, h), class: 'viz-bar-open viz-bar-mark',
+      }));
+    }
+
+    // Hit target spans the whole band so small bars stay easy to hover.
+    const hit = svgEl('rect', {
+      x: margin.left + index * band, y: margin.top, width: band, height: plotH,
+      class: 'viz-bar-hit', tabindex: '0', role: 'button',
+    });
+    const describe = () =>
+      `${bar.full}: ${bar.value != null ? `${bar.value} hours` : bar.status}, ${bar.detail}`;
+    hit.setAttribute('aria-label', describe());
+    hit.addEventListener('mouseenter', (event) => showVizTooltip(event, bar));
+    hit.addEventListener('mousemove', (event) => showVizTooltip(event, bar));
+    hit.addEventListener('mouseleave', hideVizTooltip);
+    hit.addEventListener('focus', (event) => showVizTooltip(event, bar));
+    hit.addEventListener('blur', hideVizTooltip);
+    svg.append(hit);
+
+    if (index % labelEvery === 0) {
+      const tick = svgEl('text', {
+        x: margin.left + index * band + band / 2, y: baseline + 16,
+        'text-anchor': 'middle', class: 'viz-tick',
+      });
+      tick.textContent = bar.label;
+      svg.append(tick);
+    }
+  });
+
+  // Selective direct labels: the highest bar only, never every point.
+  const peak = bars.reduce((best, b, i) => (b.value ?? 0) > (bars[best]?.value ?? 0) ? i : best, 0);
+  if (bars[peak]?.value) {
+    const value = svgEl('text', {
+      x: margin.left + peak * band + band / 2, y: y(bars[peak].value) - 6,
+      'text-anchor': 'middle', class: 'viz-value',
+    });
+    value.textContent = bars[peak].value.toFixed(1);
+    svg.append(value);
+  }
+
+  const legendItems = [el('span', {}, [el('i', { className: 'viz-swatch' }), 'Hours worked'])];
+  if (bars.some((b) => b.value == null && b.status === 'incomplete')) {
+    legendItems.push(el('span', {}, [el('i', { className: 'viz-swatch open' }), 'One punch only — hours unknown']));
+  }
+  if (showTarget) {
+    legendItems.push(el('span', {}, [el('i', { className: 'viz-swatch target' }), `Standard day (${chartState.target}h)`]));
+  }
+  $('#repLegend').replaceChildren(...legendItems);
+}
+
+function showVizTooltip(event, bar) {
+  const tip = $('#repTooltip');
+  tip.replaceChildren(
+    el('b', {}, bar.full),
+    el('div', {}, bar.value != null ? `${bar.value} hours` : 'Hours unknown'),
+    el('div', { className: 'muted' }, bar.detail),
+  );
+  tip.hidden = false;
+  const box = event.target.getBoundingClientRect();
+  const x = (event.clientX ?? box.left + box.width / 2) + 12;
+  tip.style.left = `${Math.min(x, window.innerWidth - tip.offsetWidth - 12)}px`;
+  tip.style.top = `${(event.clientY ?? box.top) - 8}px`;
+}
+
+const hideVizTooltip = () => { $('#repTooltip').hidden = true; };
+
+function renderReportTable() {
+  table('#repTable', [
+    { label: chartState.mode === 'days' ? 'Date' : 'Employee', get: (b) => b.full },
+    { label: 'Hours', get: (b) => (b.value != null ? b.value : '—') },
+    { label: 'Detail', get: (b) => b.detail },
+    { label: 'Status', get: (b) => pill(b.status, statusKind[b.status] || 'muted') },
+  ], chartState.bars, 'No data for this range.');
+}
+
+$('#repLoadBtn').addEventListener('click', () => loadReport().catch((e) => toast(e.message, 'bad')));
+$('#repEmployee').addEventListener('change', () => loadReport().catch((e) => toast(e.message, 'bad')));
+$('#repTableBtn').addEventListener('click', (event) => {
+  const panel = $('#repTablePanel');
+  panel.hidden = !panel.hidden;
+  event.currentTarget.setAttribute('aria-expanded', String(!panel.hidden));
+  event.currentTarget.textContent = panel.hidden ? 'Show data table' : 'Hide data table';
+});
+
+let repResizeTimer = null;
+window.addEventListener('resize', () => {
+  if (state.view !== 'report') return;
+  clearTimeout(repResizeTimer);
+  repResizeTimer = setTimeout(drawChart, 150);
+});
+
 /* ---------- boot ---------- */
 
-for (const id of ['#attFrom', '#attTo', '#punchFrom', '#punchTo']) $(id).value = today();
+for (const id of ['#attFrom', '#attTo', '#punchFrom', '#punchTo', '#repFrom', '#repTo']) $(id).value = today();
 $('#attFrom').value = new Date(Date.now() - 6 * 864e5).toLocaleDateString('en-CA');
+$('#repFrom').value = new Date(Date.now() - 13 * 864e5).toLocaleDateString('en-CA');
 
 const status = await api('/api/auth/status');
 if (status.authenticated) showApp(status.user);
