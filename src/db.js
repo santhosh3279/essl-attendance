@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS devices (
   port           INTEGER NOT NULL DEFAULT 4370,
   inport         INTEGER NOT NULL DEFAULT 5200,     -- local UDP port used by the library
   conn_mode      TEXT    NOT NULL DEFAULT 'auto',   -- 'auto' | 'tcp' | 'udp'; auto only falls back on ECONNREFUSED
+  comm_key       TEXT,                              -- device password; must be plaintext, it is scrambled per session at connect
   location       TEXT,
   serial         TEXT,                              -- read from the device; stable identity across IP changes
   model          TEXT,
@@ -113,6 +114,27 @@ CREATE TABLE IF NOT EXISTS sync_logs (
 
 CREATE INDEX IF NOT EXISTS idx_sync_logs_started ON sync_logs(started_at DESC);
 `);
+
+/**
+ * Migrations for databases created before a column existed. `CREATE TABLE IF
+ * NOT EXISTS` above only shapes NEW databases — an existing one keeps its old
+ * columns, so anything added later has to be ALTERed in here too.
+ *
+ * Each step is guarded by its own check, so running it twice is harmless.
+ */
+function migrate() {
+  const columns = (table) =>
+    db.prepare(`PRAGMA table_info(${table})`).all().map((column) => column.name);
+
+  if (!columns('devices').includes('comm_key')) {
+    db.exec('ALTER TABLE devices ADD COLUMN comm_key TEXT');
+    console.log('[db] migration: added devices.comm_key');
+  }
+
+  db.exec('PRAGMA user_version = 1');
+}
+
+migrate();
 
 /** Runs `fn` inside a transaction and returns its result. */
 export function transaction(fn) {

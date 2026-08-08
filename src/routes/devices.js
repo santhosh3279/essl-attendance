@@ -8,11 +8,17 @@ export const devicesRouter = Router();
 
 const getDevice = (id) => db.prepare('SELECT * FROM devices WHERE id = ?').get(Number(id));
 
-const decorate = (device) => ({
+/**
+ * The comm key is a device credential and has to be stored in plaintext (it is
+ * scrambled per-session at connect time, so it cannot be hashed). This is the
+ * only place that keeps it out of reach — never spread the raw row to a client.
+ */
+const decorate = ({ comm_key: commKey, ...device }) => ({
   ...device,
   enabled: !!device.enabled,
   live_capture: !!device.live_capture,
   live_connected: isLive(device.id),
+  has_comm_key: !!commKey,
 });
 
 function validate(body, { partial = false } = {}) {
@@ -36,6 +42,13 @@ function validate(body, { partial = false } = {}) {
   return errors;
 }
 
+/** Blank means "no key"; anything else is stored as typed. */
+function commKeyValue(raw) {
+  if (raw == null) return null;
+  const text = String(raw).trim();
+  return text === '' ? null : text;
+}
+
 /** Two devices cannot share a local UDP bind port — the second one gets EADDRINUSE. */
 function inportClash(inport, excludeId = null) {
   if (!Number(inport)) return null;
@@ -57,8 +70,8 @@ devicesRouter.post('/', (req, res) => {
 
   const info = db
     .prepare(
-      `INSERT INTO devices (name, driver, ip, port, inport, conn_mode, location, enabled, live_capture)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO devices (name, driver, ip, port, inport, conn_mode, comm_key, location, enabled, live_capture)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       req.body.name,
@@ -67,6 +80,7 @@ devicesRouter.post('/', (req, res) => {
       Number(req.body.port) || 4370,
       Number(req.body.inport) || 0,
       req.body.conn_mode || 'auto',
+      commKeyValue(req.body.comm_key),
       req.body.location || null,
       req.body.enabled === false ? 0 : 1,
       req.body.live_capture ? 1 : 0,
@@ -103,15 +117,18 @@ devicesRouter.put('/:id', async (req, res) => {
     enabled: req.body.enabled == null ? existing.enabled : Number(!!req.body.enabled),
     live_capture:
       req.body.live_capture == null ? existing.live_capture : Number(!!req.body.live_capture),
+    // Absent field keeps the saved key; an explicit empty string clears it.
+    comm_key:
+      req.body.comm_key === undefined ? existing.comm_key : commKeyValue(req.body.comm_key),
   };
 
   db.prepare(
     `UPDATE devices SET name = ?, driver = ?, ip = ?, port = ?, inport = ?,
-            conn_mode = ?, location = ?, enabled = ?, live_capture = ?
+            conn_mode = ?, comm_key = ?, location = ?, enabled = ?, live_capture = ?
       WHERE id = ?`,
   ).run(
     next.name, next.driver, next.ip, next.port, next.inport,
-    next.conn_mode, next.location, next.enabled, next.live_capture, existing.id,
+    next.conn_mode, next.comm_key, next.location, next.enabled, next.live_capture, existing.id,
   );
 
   const device = getDevice(existing.id);

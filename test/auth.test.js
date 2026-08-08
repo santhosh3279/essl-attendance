@@ -239,3 +239,37 @@ test.after(() => {
   db.close();
   fs.rmSync(path.dirname(tmpDb), { recursive: true, force: true });
 });
+
+test('the comm key is never returned to a client', async () => {
+  const created = await admin('POST', '/api/devices', {
+    name: 'Keyed Gate',
+    ip: '10.9.9.50',
+    driver: 'fake',
+    comm_key: '123456',
+  });
+  assert.equal(created.status, 201);
+  assert.equal(created.body.comm_key, undefined, 'create response must not echo the key');
+  assert.equal(created.body.has_comm_key, true, 'but must say one is set');
+
+  const listed = await admin('GET', '/api/devices');
+  const device = listed.body.find((d) => d.name === 'Keyed Gate');
+  assert.equal(device.comm_key, undefined, 'list must not expose the key');
+  assert.equal(device.has_comm_key, true);
+
+  // It is stored, though — the adapter needs it in plaintext to derive the payload.
+  const stored = db.prepare('SELECT comm_key FROM devices WHERE id = ?').get(device.id);
+  assert.equal(stored.comm_key, '123456');
+
+  // Editing without the field keeps the saved key rather than wiping it.
+  const renamed = await admin('PUT', `/api/devices/${device.id}`, { name: 'Keyed Gate 2' });
+  assert.equal(renamed.status, 200);
+  assert.equal(
+    db.prepare('SELECT comm_key FROM devices WHERE id = ?').get(device.id).comm_key,
+    '123456',
+    'an edit that omits comm_key must not clear it',
+  );
+
+  // An explicit empty string clears it.
+  await admin('PUT', `/api/devices/${device.id}`, { comm_key: '' });
+  assert.equal(db.prepare('SELECT comm_key FROM devices WHERE id = ?').get(device.id).comm_key, null);
+});

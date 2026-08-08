@@ -2,6 +2,15 @@ import ZKLib from 'zkteco-js';
 import { DeviceAdapter, normalizeUserId } from './adapter.js';
 import { config } from '../config.js';
 import { parseDeviceTime } from '../lib/time.js';
+import {
+  CMD_ACK_OK,
+  CMD_ACK_UNAUTH,
+  CMD_AUTH,
+  CMD_CONNECT,
+  describeAck,
+  makeCommKey,
+  replyCommandId,
+} from './commKey.js';
 
 const NULLS = /\u0000/g;
 
@@ -37,19 +46,54 @@ export class ZkDeviceAdapter extends DeviceAdapter {
     );
 
     const mode = this.device.conn_mode || 'auto';
-    if (mode === 'udp') {
-      // createSocket() only reaches UDP when TCP is actively refused, so force it here.
-      await zk.zudp.createSocket();
-      await zk.zudp.connect();
-      zk.connectionType = 'udp';
-    } else {
-      await zk.createSocket();
-      if (mode === 'tcp' && zk.connectionType !== 'tcp') {
-        await zk.disconnect().catch(() => {});
-        throw new Error('device is configured as TCP-only but only answered on UDP');
+    try {
+      if (mode === 'udp') {
+        // createSocket() only reaches UDP when TCP is actively refused, so force it here.
+        await zk.zudp.createSocket();
+        await this.handshake(zk.zudp);
+        zk.connectionType = 'udp';
+      } else {
+        await zk.ztcp.createSocket();
+        await this.handshake(zk.ztcp);
+        zk.connectionType = 'tcp';
       }
+    } catch (err) {
+      await zk.disconnect().catch(() => {});
+      throw err;
     }
     this.zk = zk;
+  }
+
+  /**
+   * Opens the session properly, which the library does not: its connect() takes
+   * ANY reply as success, so a terminal with a comm key set reports "connected"
+   * and then fails every subsequent command in a way that looks like a timeout.
+   */
+  async handshake(transport) {
+    const connectReply = await transport.executeCmd(CMD_CONNECT, '');
+    let ack = replyCommandId(connectReply);
+
+    if (ack === CMD_ACK_UNAUTH) {
+      const commKey = this.device.comm_key;
+      if (commKey == null || commKey === '') {
+        throw new Error(
+          'device requires a comm key — set it on the device in this app (Devices → Edit → Comm key)',
+        );
+      }
+
+      // The payload mixes the key with the session id the device just issued.
+      const payload = makeCommKey(commKey, transport.sessionId);
+      ack = replyCommandId(await transport.executeCmd(CMD_AUTH, payload));
+
+      if (ack !== CMD_ACK_OK) {
+        throw new Error(`device rejected the comm key (${describeAck(ack)})`);
+      }
+      return;
+    }
+
+    if (ack !== CMD_ACK_OK) {
+      throw new Error(`device refused the connection (${describeAck(ack)})`);
+    }
   }
 
   async disconnect() {

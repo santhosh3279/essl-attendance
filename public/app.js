@@ -246,6 +246,11 @@ function openDeviceDialog(device = null) {
   $('#dIp').value = device?.ip ?? '';
   $('#dPort').value = device?.port ?? 4370;
   $('#dInport').value = device?.inport ?? '';
+  // The stored key is never sent back to the browser, so this always starts blank.
+  $('#dCommKey').value = '';
+  $('#dCommKeyHint').textContent = device?.has_comm_key
+    ? 'A comm key is saved. Leave blank to keep it, or type a new one to replace it.'
+    : 'Device password. On the terminal: Comm / Security settings. Blank if none set.';
   $('#dConnMode').value = device?.conn_mode ?? 'auto';
   $('#dDriver').value = device?.driver ?? 'zk';
   $('#dEnabled').checked = device ? !!device.enabled : true;
@@ -264,6 +269,8 @@ $('#deviceForm').addEventListener('submit', async (event) => {
     ip: $('#dIp').value.trim(),
     port: Number($('#dPort').value) || 4370,
     inport: Number($('#dInport').value) || null,
+    // Omitted when blank so editing a device does not wipe its saved key.
+    ...($('#dCommKey').value.trim() ? { comm_key: $('#dCommKey').value.trim() } : {}),
     conn_mode: $('#dConnMode').value,
     driver: $('#dDriver').value,
     enabled: $('#dEnabled').checked,

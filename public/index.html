@@ -176,9 +176,17 @@
         </div>
         <div class="row">
           <div class="field">
+            <label for="dCommKey">Comm key</label>
+            <input id="dCommKey" type="number" min="0" placeholder="blank if none set">
+            <span class="muted" id="dCommKeyHint">Device password. On the terminal: Comm / Security settings.</span>
+          </div>
+          <div class="field">
             <label for="dInport">UDP local port</label>
             <input id="dInport" type="number" placeholder="auto — unique per device">
           </div>
+        </div>
+        <div class="row">
+          <div class="field"></div>
           <div class="field" style="justify-content:flex-end">
             <div class="checkbox"><input type="checkbox" id="dEnabled" checked><label for="dEnabled">Enabled</label></div>
             <div class="checkbox"><input type="checkbox" id="dLive"><label for="dLive">Live capture</label></div>
