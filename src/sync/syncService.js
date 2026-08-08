@@ -64,6 +64,11 @@ function migrateSerial(deviceId, serial) {
   });
 }
 
+// A terminal whose clock was briefly wrong stamps punches years ahead; the real
+// device carries two such rows. They would sit in the grid as phantom future
+// attendance, so drop them — but count them, never silently.
+const FUTURE_TOLERANCE_MS = 24 * 60 * 60 * 1000;
+
 /**
  * Writes punches idempotently. Devices return their whole log on every read, so
  * re-inserts are expected and silently ignored by the unique index.
@@ -71,9 +76,15 @@ function migrateSerial(deviceId, serial) {
 function storePunches(device, deviceSerial, punches, source) {
   let inserted = 0;
   let skipped = 0;
+  let rejected = 0;
+  const cutoff = Date.now() + FUTURE_TOLERANCE_MS;
 
   transaction(() => {
     for (const punch of punches) {
+      if (punch.time.getTime() > cutoff) {
+        rejected += 1;
+        continue;
+      }
       const employee = findEmployeeId.get(device.id, punch.deviceUserId);
       if (!employee) insertMapping.run(device.id, punch.deviceUserId, null);
 
@@ -95,7 +106,7 @@ function storePunches(device, deviceSerial, punches, source) {
     }
   });
 
-  return { inserted, skipped };
+  return { inserted, skipped, rejected };
 }
 
 /** Records device users so unknown enrollment numbers show up for mapping. */
@@ -131,7 +142,7 @@ export async function syncDevice(deviceId, trigger = 'manual') {
     if (result.info.serial) migrateSerial(device.id, result.deviceSerial);
 
     const newUsers = storeUsers(device, result.users);
-    const { inserted, skipped } = storePunches(
+    const { inserted, skipped, rejected } = storePunches(
       device,
       result.deviceSerial,
       result.punches,
@@ -155,6 +166,7 @@ export async function syncDevice(deviceId, trigger = 'manual') {
       inserted,
       skipped,
       newUsers,
+      rejected,
       durationMs: Date.now() - startedAt.getTime(),
     };
 

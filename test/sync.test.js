@@ -138,15 +138,24 @@ test('comm-key derivation is deterministic and session-bound', async () => {
   assert.deepEqual(makeCommKey(123456, 4242), a, 'same inputs must give the same payload');
 
   // Session-bound: the device issues a new session id per connection, so the
-  // payload on the wire differs every time and cannot be replayed.
-  assert.notDeepEqual(makeCommKey(123456, 4243), a);
+  // payload differs between connections. Note the algorithm overwrites byte 2
+  // with the tick constant, which discards the low byte of (key + session) —
+  // so a session differing by less than 256 can produce the same payload. That
+  // is the real algorithm's behaviour, not a porting slip.
+  assert.notDeepEqual(makeCommKey(123456, 4242 + 256), a);
   assert.notDeepEqual(makeCommKey(123457, 4242), a);
+
+  // Distinct keys still map to distinct payloads across a realistic range.
+  const payloads = new Set();
+  for (let key = 0; key < 2000; key += 1) payloads.add(makeCommKey(key, 4242).toString('hex'));
+  assert.equal(payloads.size, 2000, 'keys must not collide');
 
   // Accepts the string form the database stores.
   assert.deepEqual(makeCommKey('123456', 4242), a);
 
-  // Regression lock, hand-checked: key 0 / session 0 gives 00000000, XOR 'ZKSO'
-  // -> 5a4b534f, halves swapped -> 534f5a4b, XOR 0x32 on bytes 0,1,3 -> 617d5a79.
+  // Regression lock, hand-checked: key 0 / session 0 gives 00000000, XOR ZKSO
+  // -> 5a4b534f, halves swapped -> 534f5a4b, then XOR 0x32 on bytes 0,1,3 and
+  // byte 2 REPLACED by 0x32 -> 617d3279.
   // Proof of correctness is still the device answering CMD_ACK_OK, not this value.
-  assert.equal(makeCommKey(0, 0).toString('hex'), '617d5a79');
+  assert.equal(makeCommKey(0, 0).toString('hex'), '617d3279');
 });

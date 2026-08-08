@@ -13,7 +13,8 @@
     "service:status": "systemctl status attendance --no-pager",
     "service:logs": "journalctl -u attendance -f -n 50",
     "test": "node --test 'test/**/*.test.js'",
-    "docs:build": "bash scripts/build-docs.sh"
+    "docs:build": "bash scripts/build-docs.sh",
+    "postinstall": "node scripts/patch-zkteco.mjs"
   },
   "engines": {
     "node": ">=22.5.0"

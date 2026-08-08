@@ -42,9 +42,13 @@ export function makeCommKey(key, sessionId, ticks = 50) {
   swapped.writeUInt16LE(packed.readUInt16LE(2), 0);
   swapped.writeUInt16LE(packed.readUInt16LE(0), 2);
 
+  // Byte 2 is REPLACED by the tick value, not XORed with it. Getting this wrong
+  // produces a payload the device rejects in a way indistinguishable from a
+  // wrong key, which is exactly how much time it can cost.
   const mask = ticks & 0xff;
   swapped[0] ^= mask;
   swapped[1] ^= mask;
+  swapped[2] = mask;
   swapped[3] ^= mask;
   return swapped;
 }

@@ -110,12 +110,15 @@ export class ZkDeviceAdapter extends DeviceAdapter {
 
   async getInfo() {
     const info = await this.zk.getInfo().catch(() => ({}));
-    // Every field below is optional on older firmware, so failures degrade instead of throwing.
-    const [serial, model, firmware] = await Promise.all([
-      this.zk.getSerialNumber().catch(() => null),
-      this.zk.getDeviceName().catch(() => null),
-      this.zk.getFirmware().catch(() => null),
-    ]);
+
+    // Strictly sequential: the ZK protocol is one request/response at a time on
+    // a single socket. Issuing these concurrently interleaves them and the
+    // device's replies get matched to the wrong commands — which showed up as
+    // the model and firmware both reporting the serial number.
+    // Each is optional on older firmware, so a failure degrades to null.
+    const serial = await this.zk.getSerialNumber().catch(() => null);
+    const model = await this.zk.getDeviceName().catch(() => null);
+    const firmware = await this.zk.getFirmware().catch(() => null);
     const deviceTime = await this.zk.getTime().catch(() => null);
 
     return {
