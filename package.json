@@ -1,0 +1,25 @@
+{
+  "name": "essl-attendance",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Attendance management web app for ESSL / ZKTeco biometric devices",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env.production src/index.js",
+    "dev": "node --env-file-if-exists=.env.development --watch src/index.js",
+    "seed:demo": "node --env-file-if-exists=.env.development scripts/seed-demo.js",
+    "service:install": "echo 'run with sudo: sudo bash scripts/install-service.sh'",
+    "service:status": "systemctl status attendance --no-pager",
+    "service:logs": "journalctl -u attendance -f -n 50",
+    "test": "node --test 'test/**/*.test.js'",
+    "docs:build": "bash scripts/build-docs.sh"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "zkteco-js": "^1.7.2"
+  }
+}

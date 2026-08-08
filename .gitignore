@@ -1,0 +1,9 @@
+node_modules/
+data/
+backups/
+*.log
+
+# .env.development and .env.production ARE tracked — they hold no secrets, only
+# host/port/paths, and production needs .env.production present to boot.
+.env
+.env.local

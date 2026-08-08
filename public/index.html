@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Attendance — ESSL</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>🕘</text></svg>">
+</head>
+<body>
+  <!-- Shown until /api/auth/status says we are signed in. -->
+  <div id="gate" hidden>
+    <form id="gateForm" class="gate-card">
+      <h2 id="gateTitle">Sign in</h2>
+      <p id="gateHint" class="muted"></p>
+      <div class="field"><label for="gUsername">Username</label><input id="gUsername" autocomplete="username" required></div>
+      <div class="field" id="gNameField" hidden><label for="gName">Full name</label><input id="gName" autocomplete="name"></div>
+      <div class="field"><label for="gPassword">Password</label><input id="gPassword" type="password" autocomplete="current-password" required></div>
+      <div class="field" id="gConfirmField" hidden><label for="gConfirm">Confirm password</label><input id="gConfirm" type="password" autocomplete="new-password"></div>
+      <div id="gateError" class="gate-error" hidden></div>
+      <button class="btn" id="gateSubmit" type="submit">Sign in</button>
+    </form>
+  </div>
+
+  <header hidden>
+    <h1>Attendance</h1>
+    <nav>
+      <button data-view="dashboard" class="active">Dashboard</button>
+      <button data-view="devices">Devices</button>
+      <button data-view="employees">Employees</button>
+      <button data-view="mappings">Mapping</button>
+      <button data-view="attendance">Attendance</button>
+      <button data-view="punches">Punch Log</button>
+      <button data-view="synclog">Sync Log</button>
+      <button data-view="users" data-admin hidden>Users</button>
+    </nav>
+    <div class="spacer"></div>
+    <div class="live-badge"><span class="dot idle" id="streamDot"></span><span id="streamText">connecting…</span></div>
+    <button class="btn" id="syncAllBtn" data-admin>Sync all now</button>
+    <div class="account">
+      <span id="whoami" class="muted"></span>
+      <button class="btn ghost small" id="passwordBtn">Password</button>
+      <button class="btn ghost small" id="logoutBtn">Sign out</button>
+    </div>
+  </header>
+
+  <main hidden>
+    <!-- Dashboard -->
+    <section class="view active" id="view-dashboard">
+      <div class="cards" id="statCards"></div>
+      <div class="panel">
+        <h2>Latest punches</h2>
+        <div class="table-wrap"><table id="recentTable"></table></div>
+      </div>
+      <div class="panel">
+        <h2>Device health</h2>
+        <div class="table-wrap"><table id="healthTable"></table></div>
+      </div>
+    </section>
+
+    <!-- Devices -->
+    <section class="view" id="view-devices">
+      <div class="toolbar">
+        <button class="btn" id="addDeviceBtn" data-admin>Add device</button>
+        <span class="muted">ESSL / ZKTeco terminals. Default port 4370.</span>
+      </div>
+      <div class="device-grid" id="deviceGrid"></div>
+    </section>
+
+    <!-- Employees -->
+    <section class="view" id="view-employees">
+      <div class="toolbar">
+        <button class="btn" id="addEmployeeBtn" data-admin>Add employee</button>
+        <div class="field">
+          <label for="employeeSearch">Search</label>
+          <input id="employeeSearch" placeholder="name or code">
+        </div>
+      </div>
+      <div class="panel"><div class="table-wrap"><table id="employeeTable"></table></div></div>
+    </section>
+
+    <!-- Mapping -->
+    <section class="view" id="view-mappings">
+      <div class="toolbar">
+        <button class="btn" id="autoLinkBtn" data-admin>Auto-link by matching code</button>
+        <div class="checkbox">
+          <input type="checkbox" id="onlyUnmapped" checked>
+          <label for="onlyUnmapped">Show unmapped only</label>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>Device enrollment numbers → employees</h2>
+        <div class="panel-body muted" style="padding-bottom:0">
+          Enrollment numbers are per device: ID 5 on one terminal is not ID 5 on another.
+          Link each one to an employee — past punches are backfilled automatically.
+        </div>
+        <div class="table-wrap"><table id="mappingTable"></table></div>
+      </div>
+    </section>
+
+    <!-- Attendance -->
+    <section class="view" id="view-attendance">
+      <div class="toolbar">
+        <div class="field"><label for="attFrom">From</label><input type="date" id="attFrom"></div>
+        <div class="field"><label for="attTo">To</label><input type="date" id="attTo"></div>
+        <div class="field"><label for="attEmployee">Employee</label><select id="attEmployee"><option value="">All</option></select></div>
+        <div class="field"><label for="attDept">Department</label><select id="attDept"><option value="">All</option></select></div>
+        <button class="btn" id="attLoadBtn">Show</button>
+        <button class="btn ghost" id="attCsvBtn">Export CSV</button>
+        <button class="btn ghost" id="attTodayBtn">Today</button>
+        <button class="btn ghost" id="attMonthBtn">This month</button>
+      </div>
+      <div class="cards" id="attSummary"></div>
+      <div class="panel"><div class="table-wrap"><table id="attendanceTable"></table></div></div>
+    </section>
+
+    <!-- Punch log -->
+    <section class="view" id="view-punches">
+      <div class="toolbar">
+        <div class="field"><label for="punchFrom">From</label><input type="date" id="punchFrom"></div>
+        <div class="field"><label for="punchTo">To</label><input type="date" id="punchTo"></div>
+        <div class="field"><label for="punchDevice">Device</label><select id="punchDevice"><option value="">All</option></select></div>
+        <button class="btn" id="punchLoadBtn">Show</button>
+        <button class="btn ghost" id="punchCsvBtn">Export CSV</button>
+      </div>
+      <div class="panel"><div class="table-wrap"><table id="punchTable"></table></div></div>
+    </section>
+
+    <!-- Sync log -->
+    <section class="view" id="view-synclog">
+      <div class="panel">
+        <h2>Sync history</h2>
+        <div class="table-wrap"><table id="syncTable"></table></div>
+      </div>
+    </section>
+
+    <!-- Users -->
+    <section class="view" id="view-users">
+      <div class="toolbar">
+        <button class="btn" id="addUserBtn">Add user</button>
+        <span class="muted">Admins control everything. Viewers can read attendance and export, nothing else.</span>
+      </div>
+      <div class="panel"><div class="table-wrap"><table id="userTable"></table></div></div>
+    </section>
+  </main>
+
+  <!-- Device dialog -->
+  <dialog id="deviceDialog">
+    <form method="dialog" id="deviceForm">
+      <h2 id="deviceDialogTitle">Add device</h2>
+      <div class="body">
+        <div class="row">
+          <div class="field"><label for="dName">Name</label><input id="dName" required placeholder="Main Gate"></div>
+          <div class="field"><label for="dLocation">Location</label><input id="dLocation" placeholder="Factory entrance"></div>
+        </div>
+        <div class="row">
+          <div class="field"><label for="dIp">IP address</label><input id="dIp" required placeholder="192.168.1.201"></div>
+          <div class="field"><label for="dPort">Port</label><input id="dPort" type="number" value="4370"></div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="dConnMode">Connection</label>
+            <select id="dConnMode">
+              <option value="auto">Auto (TCP, fall back to UDP)</option>
+              <option value="tcp">TCP only</option>
+              <option value="udp">UDP only</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="dDriver">Driver</label>
+            <select id="dDriver">
+              <option value="zk">Real ESSL / ZKTeco device</option>
+              <option value="fake">Simulated (demo &amp; testing)</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="dInport">UDP local port</label>
+            <input id="dInport" type="number" placeholder="auto — unique per device">
+          </div>
+          <div class="field" style="justify-content:flex-end">
+            <div class="checkbox"><input type="checkbox" id="dEnabled" checked><label for="dEnabled">Enabled</label></div>
+            <div class="checkbox"><input type="checkbox" id="dLive"><label for="dLive">Live capture</label></div>
+          </div>
+        </div>
+      </div>
+      <footer>
+        <button type="button" class="btn ghost" id="deviceCancel">Cancel</button>
+        <button type="submit" class="btn">Save</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <!-- Employee dialog -->
+  <dialog id="employeeDialog">
+    <form method="dialog" id="employeeForm">
+      <h2 id="employeeDialogTitle">Add employee</h2>
+      <div class="body">
+        <div class="row">
+          <div class="field"><label for="eCode">Employee code</label><input id="eCode" required placeholder="1001"></div>
+          <div class="field"><label for="eName">Name</label><input id="eName" required placeholder="Anitha R"></div>
+        </div>
+        <div class="row">
+          <div class="field"><label for="eDept">Department</label><input id="eDept" placeholder="Production"></div>
+          <div class="field" style="justify-content:flex-end">
+            <div class="checkbox"><input type="checkbox" id="eActive" checked><label for="eActive">Active</label></div>
+          </div>
+        </div>
+      </div>
+      <footer>
+        <button type="button" class="btn ghost" id="employeeCancel">Cancel</button>
+        <button type="submit" class="btn">Save</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <!-- User dialog -->
+  <dialog id="userDialog">
+    <form method="dialog" id="userForm">
+      <h2 id="userDialogTitle">Add user</h2>
+      <div class="body">
+        <div class="row">
+          <div class="field"><label for="uUsername">Username</label><input id="uUsername" required autocomplete="off"></div>
+          <div class="field"><label for="uName">Full name</label><input id="uName" required></div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="uRole">Role</label>
+            <select id="uRole">
+              <option value="viewer">Viewer — read attendance and export</option>
+              <option value="admin">Admin — full control</option>
+            </select>
+          </div>
+          <div class="field" style="justify-content:flex-end">
+            <div class="checkbox"><input type="checkbox" id="uActive" checked><label for="uActive">Active</label></div>
+          </div>
+        </div>
+        <div class="field">
+          <label for="uPassword">Password</label>
+          <input id="uPassword" type="password" autocomplete="new-password" placeholder="at least 8 characters">
+          <span class="muted" id="uPasswordHint">Leave blank to keep the current password.</span>
+        </div>
+      </div>
+      <footer>
+        <button type="button" class="btn ghost" id="userCancel">Cancel</button>
+        <button type="submit" class="btn">Save</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <!-- Change own password -->
+  <dialog id="passwordDialog">
+    <form method="dialog" id="passwordForm">
+      <h2>Change your password</h2>
+      <div class="body">
+        <div class="field"><label for="pCurrent">Current password</label><input id="pCurrent" type="password" autocomplete="current-password" required></div>
+        <div class="field"><label for="pNew">New password</label><input id="pNew" type="password" autocomplete="new-password" required placeholder="at least 8 characters"></div>
+        <div class="field"><label for="pConfirm">Confirm new password</label><input id="pConfirm" type="password" autocomplete="new-password" required></div>
+        <span class="muted">Your other sessions will be signed out.</span>
+      </div>
+      <footer>
+        <button type="button" class="btn ghost" id="passwordCancel">Cancel</button>
+        <button type="submit" class="btn">Change password</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <div id="toasts"></div>
+  <script src="/app.js" type="module"></script>
+</body>
+</html>

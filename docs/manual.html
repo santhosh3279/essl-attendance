@@ -1,0 +1,710 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ESSL Attendance — Installation and User Guide</title>
+<style>
+  /* wkhtmltopdf runs an old WebKit: no flexbox or grid, plain block layout only. */
+  @page { margin: 18mm 16mm; }
+
+  body {
+    font-family: "DejaVu Sans", Arial, Helvetica, sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.5;
+    color: #1c1f24;
+    margin: 0;
+  }
+
+  h1 { font-size: 20pt; margin: 0 0 4pt; color: #14213d; }
+  h2 {
+    font-size: 14pt;
+    margin: 22pt 0 8pt;
+    padding-bottom: 4pt;
+    border-bottom: 1.5pt solid #2563eb;
+    color: #14213d;
+    page-break-after: avoid;
+  }
+  h3 { font-size: 11.5pt; margin: 14pt 0 5pt; color: #14213d; page-break-after: avoid; }
+  h4 { font-size: 10.5pt; margin: 11pt 0 4pt; color: #33383f; page-break-after: avoid; }
+  p, li { margin: 0 0 6pt; }
+  ul, ol { margin: 0 0 8pt; padding-left: 18pt; }
+  li { padding-left: 2pt; }
+
+  code, .mono {
+    font-family: "DejaVu Sans Mono", "Courier New", monospace;
+    font-size: 9pt;
+    background: #f1f3f6;
+    padding: 1pt 3pt;
+    border-radius: 2pt;
+  }
+
+  pre {
+    font-family: "DejaVu Sans Mono", "Courier New", monospace;
+    font-size: 8.8pt;
+    background: #f7f8fa;
+    border: 0.5pt solid #dfe3e8;
+    border-left: 2.5pt solid #2563eb;
+    padding: 7pt 9pt;
+    margin: 0 0 9pt;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    page-break-inside: avoid;
+    line-height: 1.4;
+  }
+  pre code { background: none; padding: 0; font-size: 8.8pt; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0 0 10pt;
+    font-size: 9.3pt;
+    page-break-inside: avoid;
+  }
+  th, td { border: 0.5pt solid #d7dbe0; padding: 4pt 6pt; text-align: left; vertical-align: top; }
+  th { background: #eef2f8; font-weight: bold; color: #14213d; }
+  td.yes { color: #15803d; font-weight: bold; }
+  td.no { color: #b91c1c; }
+
+  .note, .warn, .danger {
+    padding: 7pt 10pt;
+    margin: 0 0 10pt;
+    border-left: 3pt solid;
+    page-break-inside: avoid;
+    font-size: 9.8pt;
+  }
+  .note { background: #eef4ff; border-color: #2563eb; }
+  .warn { background: #fdf6e7; border-color: #b45309; }
+  .danger { background: #fdeeee; border-color: #b91c1c; }
+  .note b, .warn b, .danger b { display: block; margin-bottom: 2pt; }
+
+  .cover { text-align: center; padding-top: 55mm; page-break-after: always; }
+  .cover h1 { font-size: 30pt; border: none; margin-bottom: 6pt; }
+  .cover .sub { font-size: 13pt; color: #5b6472; margin-bottom: 26pt; }
+  .cover .meta { font-size: 10pt; color: #6b7280; line-height: 1.9; }
+  .cover .rule { border-top: 2pt solid #2563eb; width: 70mm; margin: 16pt auto; }
+
+  .server-box {
+    border: 0.5pt solid #d7dbe0;
+    background: #fafbfc;
+    padding: 8pt 11pt;
+    margin: 0 0 12pt;
+    font-size: 9.5pt;
+  }
+  .server-box table { margin: 0; font-size: 9.3pt; }
+  .server-box th, .server-box td { border: none; padding: 1.5pt 4pt 1.5pt 0; }
+  .server-box th { background: none; color: #6b7280; font-weight: normal; width: 34%; }
+
+  .step { margin-bottom: 10pt; page-break-inside: avoid; }
+  .step h4 { margin-top: 0; }
+
+  .toc { page-break-after: always; }
+  .toc ul { list-style: none; padding-left: 0; margin: 0; }
+  .toc > ul > li { margin-bottom: 4pt; }
+  .toc ul ul { padding-left: 14pt; margin: 2pt 0 6pt; }
+  .toc ul ul li { color: #4a5058; margin-bottom: 1pt; }
+
+  .small { font-size: 9pt; color: #6b7280; }
+  .nobreak { page-break-inside: avoid; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <h1>ESSL Attendance</h1>
+  <div class="sub">Installation and User Guide</div>
+  <div class="rule"></div>
+  <div class="meta">
+    Attendance management for multiple ESSL / ZKTeco biometric terminals<br>
+    Node.js &middot; Express &middot; SQLite &middot; zkteco-js<br><br>
+    Version 1.0 &middot; August 2026
+  </div>
+</div>
+
+<div class="toc">
+<h2>Contents</h2>
+<!-- Numbered by hand so the contents match the section headings exactly. -->
+<ul>
+  <li><b>1. What this system does</b>
+    <ul><li>1.1 How it works</li><li>1.2 What you need before starting</li></ul>
+  </li>
+  <li><b>2. Installation</b>
+    <ul>
+      <li>2.1 Install the application</li>
+      <li>2.2 Development vs production</li>
+      <li>2.3 Install as a service (starts on boot)</li>
+      <li>2.4 Open the firewall</li>
+    </ul>
+  </li>
+  <li><b>3. First run</b>
+    <ul><li>3.1 Create the admin account</li><li>3.2 Add your terminals</li><li>3.3 Map enrollment numbers to employees</li></ul>
+  </li>
+  <li><b>4. Daily use</b>
+    <ul><li>4.1 Dashboard</li><li>4.2 Attendance</li><li>4.3 Punch log</li><li>4.4 Exporting to Excel</li></ul>
+  </li>
+  <li><b>5. Managing users</b>
+    <ul><li>5.1 Roles</li><li>5.2 Adding and removing accounts</li><li>5.3 Passwords</li></ul>
+  </li>
+  <li><b>6. How syncing works</b>
+    <ul><li>6.1 Scheduled, manual and live</li><li>6.2 Why re-syncing never duplicates</li><li>6.3 Device clocks</li></ul>
+  </li>
+  <li><b>7. Troubleshooting</b></li>
+  <li><b>8. Security</b></li>
+  <li><b>9. Maintenance</b>
+    <ul><li>9.1 Backups</li><li>9.2 Updating</li><li>9.3 Resetting</li></ul>
+  </li>
+  <li><b>10. Reference</b>
+    <ul><li>10.1 Commands</li><li>10.2 Settings</li><li>10.3 API endpoints</li><li>10.4 File layout</li></ul>
+  </li>
+</ul>
+</div>
+
+<h2>1. What this system does</h2>
+
+<p>This application collects attendance punches from ESSL / ZKTeco biometric terminals
+on your network, merges them into one record per employee per day, and presents them
+in a web page that anyone in the office can open in a browser.</p>
+
+<p>It solves the problems that make multi-device attendance awkward:</p>
+
+<ul>
+  <li><b>Three terminals, one employee.</b> Someone punching in at the Main Gate and out
+  at the Warehouse produces one attendance record, not two.</li>
+  <li><b>Enrollment numbers are per device.</b> Employee ID 5 on one terminal is not
+  employee ID 5 on another. The system keeps them separate and lets you link each one
+  to the right person.</li>
+  <li><b>Re-reading is safe.</b> A terminal returns its entire log every time it is read.
+  Syncing twice does not create duplicate punches.</li>
+  <li><b>In/out is worked out for you.</b> Most staff never press the in/out key, so the
+  first punch of the day is treated as the arrival and the last as the departure.</li>
+</ul>
+
+<h3>1.1 How it works</h3>
+
+<p>The server connects out to each terminal over your network and reads its stored
+attendance log. The terminals never connect to the server, so they need no configuration
+changes and no firewall rules of their own.</p>
+
+<pre>  Browser  &lt;---HTTP---&gt;  Server (this app)  &lt;---ZK protocol---&gt;  Terminal 1
+                              |                                  Terminal 2
+                           SQLite                                 Terminal 3</pre>
+
+<p>Everything is stored in a single SQLite file. There is no separate database server
+to install, and no build step for the web interface.</p>
+
+<h3>1.2 What you need before starting</h3>
+
+<table>
+  <tr><th style="width:32%">Requirement</th><th>Detail</th></tr>
+  <tr><td>Operating system</td><td>Linux with systemd (Ubuntu 22.04 or newer tested)</td></tr>
+  <tr><td>Node.js</td><td>Version 22.5 or newer. The app uses Node's built-in SQLite, so nothing needs compiling.</td></tr>
+  <tr><td>Network</td><td>The server must reach each terminal's IP address, normally on TCP or UDP port 4370.</td></tr>
+  <tr><td>Terminal details</td><td>The IP address of each ESSL device. Read it from the device itself, under its communication or network settings (the exact menu path varies by model).</td></tr>
+  <tr><td>Permissions</td><td><code>sudo</code> access, needed once to install the boot service.</td></tr>
+</table>
+
+<div class="server-box">
+<b>This installation</b>
+<table>
+  <tr><th>Application folder</th><td class="mono">/home/erpdev/Attandance</td></tr>
+  <tr><th>Runs as user</th><td class="mono">erpdev</td></tr>
+  <tr><th>Server address</th><td class="mono">&lt;your server IP&gt;</td></tr>
+  <tr><th>Web address</th><td class="mono">http://&lt;your server IP&gt;:3000</td></tr>
+  <tr><th>Node.js</th><td class="mono">v24.14.0 (installed through nvm)</td></tr>
+  <tr><th>Database file</th><td class="mono">/home/erpdev/Attandance/data/attendance.db</td></tr>
+</table>
+</div>
+
+<h2>2. Installation</h2>
+
+<h3>2.1 Install the application</h3>
+
+<p>From the application folder:</p>
+
+<pre>cd /home/erpdev/Attandance
+npm install</pre>
+
+<p>That is the whole installation. There is no compiler step, no database server to set
+up and no web server to configure.</p>
+
+<p>Confirm it works before going near the terminals:</p>
+
+<pre>npm test</pre>
+
+<p>Thirteen automated checks run in a few seconds and should all pass. They cover the
+sync logic and the login system against simulated devices, so a failure here means
+something is wrong with the installation rather than with your hardware.</p>
+
+<h3>2.2 Development vs production</h3>
+
+<p>Two environments are provided. Each reads its own settings file and its own database,
+so experimenting can never damage live attendance data.</p>
+
+<table>
+  <tr><th style="width:26%"></th><th>Development</th><th>Production</th></tr>
+  <tr><td>Start with</td><td class="mono">npm run dev</td><td class="mono">npm start</td></tr>
+  <tr><td>Settings file</td><td class="mono">.env.development</td><td class="mono">.env.production</td></tr>
+  <tr><td>Reachable from</td><td>this machine only</td><td>anywhere on the LAN</td></tr>
+  <tr><td>Database</td><td class="mono">data/dev.db</td><td class="mono">data/attendance.db</td></tr>
+  <tr><td>Checks devices every</td><td>2 minutes</td><td>10 minutes</td></tr>
+  <tr><td>Reloads when files change</td><td>yes</td><td>no</td></tr>
+</table>
+
+<p>Development also has a demo mode: <code>npm run seed:demo</code> creates three simulated
+terminals and a week of punches so you can explore every screen without touching real
+hardware. It only ever writes to the development database.</p>
+
+<h3>2.3 Install as a service (starts on boot)</h3>
+
+<p>This is the step that makes the system come up on its own whenever the server is
+switched on, and restart itself if it ever crashes.</p>
+
+<pre>sudo bash scripts/install-service.sh</pre>
+
+<p>The script finds your Node.js binary, writes a systemd service file, enables it for
+boot and starts it. It is safe to run again at any time.</p>
+
+<p>Everyday commands afterwards:</p>
+
+<table>
+  <tr><th style="width:46%">Command</th><th>What it does</th></tr>
+  <tr><td class="mono">systemctl status attendance</td><td>Is it running?</td></tr>
+  <tr><td class="mono">journalctl -u attendance -f</td><td>Watch the live log (Ctrl+C to stop)</td></tr>
+  <tr><td class="mono">sudo systemctl restart attendance</td><td>Restart it</td></tr>
+  <tr><td class="mono">sudo systemctl stop attendance</td><td>Stop it until the next boot</td></tr>
+  <tr><td class="mono">sudo bash scripts/uninstall-service.sh</td><td>Remove the service; data is kept</td></tr>
+</table>
+
+<div class="warn">
+<b>If Node.js was installed with nvm</b>
+systemd needs the exact path to the Node.js binary, and upgrading Node.js through nvm
+deletes the old folder. When that happens the service stops starting. The fix is to run
+<span class="mono">sudo bash scripts/install-service.sh</span> again. To avoid the issue
+permanently, install Node.js system-wide (at <span class="mono">/usr/bin/node</span>) and
+run the installer once more.
+</div>
+
+<p>If the installer cannot find Node.js, tell it where to look:</p>
+
+<pre>sudo NODE_BIN="$(which node)" bash scripts/install-service.sh</pre>
+
+<h3>2.4 Open the firewall</h3>
+
+<p>If a firewall is active, allow the port — and restrict it to your own network rather
+than opening it to everything:</p>
+
+<pre>sudo ufw allow from 192.168.1.0/24 to any port 3000 proto tcp</pre>
+
+<p>The terminals themselves need no firewall changes, because the server connects out to
+them rather than the other way round.</p>
+
+<h2>3. First run</h2>
+
+<h3>3.1 Create the admin account</h3>
+
+<p>Open <span class="mono">http://&lt;your server IP&gt;:3000</span>. Because no accounts exist
+yet, the app shows a <b>Create the first admin</b> page. Fill in a username, your name and
+a password of at least 8 characters.</p>
+
+<div class="danger">
+<b>Do this immediately after installing</b>
+Until the first admin exists, that setup page is available to anyone who can reach the
+server. Once the account is created the page is permanently disabled and everything
+requires a login. There is no default password to change.
+</div>
+
+<h3>3.2 Add your terminals</h3>
+
+<div class="step">
+<h4>Step 1 — Add the device</h4>
+<p>Go to <b>Devices &rarr; Add device</b>. Fill in:</p>
+<table>
+  <tr><th style="width:26%">Field</th><th>What to enter</th></tr>
+  <tr><td>Name</td><td>Something recognisable: <i>Main Gate</i>, <i>Warehouse</i></td></tr>
+  <tr><td>Location</td><td>Optional note about where it is</td></tr>
+  <tr><td>IP address</td><td>The device's address, e.g. <span class="mono">192.168.1.201</span></td></tr>
+  <tr><td>Port</td><td><span class="mono">4370</span> unless it has been changed on the device</td></tr>
+  <tr><td>Connection</td><td>Leave on <i>Auto</i> to begin with</td></tr>
+  <tr><td>Driver</td><td><i>Real ESSL / ZKTeco device</i></td></tr>
+  <tr><td>UDP local port</td><td>Leave blank — one is assigned automatically</td></tr>
+</table>
+</div>
+
+<div class="step">
+<h4>Step 2 — Test the connection</h4>
+<p>Press <b>Test</b> on the device card. On success it reads back the serial number, model
+and firmware. If it fails, see <i>Troubleshooting</i>.</p>
+</div>
+
+<div class="step">
+<h4>Step 3 — Sync</h4>
+<p>Press <b>Sync now</b>. This downloads the list of enrolled users and the complete
+attendance log from that terminal. On a device with months of history the first sync can
+take a minute.</p>
+</div>
+
+<p>Repeat for each of your terminals.</p>
+
+<h3>3.3 Map enrollment numbers to employees</h3>
+
+<p>A terminal only knows enrollment numbers. Before attendance can be reported, each
+number has to be linked to a person.</p>
+
+<p>Go to the <b>Mapping</b> tab. It lists every enrollment number seen on every device,
+with the name stored on the device where available.</p>
+
+<ul>
+  <li>If your enrollment numbers already match your employee codes, press
+  <b>Auto-link by matching code</b> and the whole list links in one action.</li>
+  <li>Otherwise pick the right employee from the dropdown beside each number.</li>
+  <li>For someone not yet in the system, press <b>Create employee</b> to add them and link
+  them in one step.</li>
+</ul>
+
+<div class="note">
+<b>Linking is retroactive</b>
+When you link an enrollment number, every punch already collected under that number is
+attributed to that employee. You do not need to re-sync.
+</div>
+
+<p>Remember that the same person enrolled on all three terminals appears three times here
+— once per device. Link all three to the same employee, and their punches merge into one
+daily record.</p>
+
+<h2>4. Daily use</h2>
+
+<h3>4.1 Dashboard</h3>
+
+<p>The opening screen shows how many staff are present today, how many are absent, the
+number of punches recorded, and the health of each terminal. Below that is a live feed of
+the most recent punches. If live capture is switched on for a device, new punches appear
+here within a second or two without refreshing the page.</p>
+
+<h3>4.2 Attendance</h3>
+
+<p>Choose a date range and press <b>Show</b>. Each row is one employee on one day, merged
+across every terminal:</p>
+
+<table>
+  <tr><th style="width:20%">Column</th><th>Meaning</th></tr>
+  <tr><td>First in</td><td>Earliest punch that day, on any device</td></tr>
+  <tr><td>Last out</td><td>Latest punch that day, on any device</td></tr>
+  <tr><td>Hours</td><td>Time between the two</td></tr>
+  <tr><td>Punches</td><td>How many punches went into the row</td></tr>
+  <tr><td>Devices</td><td>Which terminals the person used</td></tr>
+  <tr><td>Status</td><td>See below</td></tr>
+</table>
+
+<table>
+  <tr><th style="width:20%">Status</th><th>Meaning</th></tr>
+  <tr><td>Present</td><td>Arrived at or before the start of the working day</td></tr>
+  <tr><td>Late</td><td>First punch after the configured start time (09:00 by default)</td></tr>
+  <tr><td>Incomplete</td><td>Only one punch — someone forgot to punch out, or is still at work</td></tr>
+  <tr><td>Absent</td><td>No punches at all that day</td></tr>
+</table>
+
+<div class="note">
+<b>Weekends and holidays</b>
+The system has no holiday calendar. Every date in the range you choose is counted, so
+Sundays and public holidays show everyone as <i>Absent</i>. This is expected — choose your
+date ranges accordingly when reporting.
+</div>
+
+<p>You can narrow the view to one employee or one department, and the summary tiles above
+the table update to match.</p>
+
+<h3>4.3 Punch log</h3>
+
+<p>The Attendance tab shows the daily summary; the Punch log shows every individual punch
+exactly as it came from the terminals, including which device recorded it and whether it
+arrived by scheduled sync or live capture. Use it when a figure looks wrong and you want
+to see the raw evidence.</p>
+
+<h3>4.4 Exporting to Excel</h3>
+
+<p>Both the Attendance and Punch log tabs have an <b>Export CSV</b> button. The file
+downloads with the current filters applied and opens directly in Excel or LibreOffice.
+Viewer accounts can export too.</p>
+
+<h2>5. Managing users</h2>
+
+<h3>5.1 Roles</h3>
+
+<table>
+  <tr><th style="width:56%">Can do</th><th style="width:22%">Admin</th><th style="width:22%">Viewer</th></tr>
+  <tr><td>View attendance, punch log, dashboard</td><td class="yes">Yes</td><td class="yes">Yes</td></tr>
+  <tr><td>Export CSV</td><td class="yes">Yes</td><td class="yes">Yes</td></tr>
+  <tr><td>View device status and sync history</td><td class="yes">Yes</td><td class="yes">Yes</td></tr>
+  <tr><td>Add or change devices, sync, set device clocks</td><td class="yes">Yes</td><td class="no">No</td></tr>
+  <tr><td>Add or change employees, map enrollment numbers</td><td class="yes">Yes</td><td class="no">No</td></tr>
+  <tr><td>Manage user accounts</td><td class="yes">Yes</td><td class="no">No</td></tr>
+</table>
+
+<p>Give reception, supervisors and payroll staff a <b>Viewer</b> account. They can see and
+export everything they need without any chance of changing device settings or deleting
+records.</p>
+
+<h3>5.2 Adding and removing accounts</h3>
+
+<p><b>Users &rarr; Add user.</b> Choose a username, full name, role and an initial password
+of at least 8 characters, then pass the password to the person so they can change it.</p>
+
+<p>When someone leaves, either untick <b>Active</b> to disable the account or delete it.
+Disabling is usually better: it ends any session they have open immediately and keeps the
+record that the account existed.</p>
+
+<p><b>Sign out</b> on a user's row ends every session that account has open — useful if a
+laptop is lost or left logged in.</p>
+
+<div class="note">
+<b>You cannot lock yourself out</b>
+The system refuses to demote, disable or delete the last remaining admin. Promote someone
+else first.
+</div>
+
+<h3>5.3 Passwords</h3>
+
+<p>Anyone can change their own password with the <b>Password</b> button in the top-right
+corner. Doing so signs out their other sessions but not the one they are using.</p>
+
+<p>An admin can reset another user's password by editing that user and entering a new one.
+That immediately signs the person out everywhere.</p>
+
+<div class="warn">
+<b>There is no "forgot password" e-mail</b>
+Password resets are done by an admin. If every admin password is lost, recovery means
+editing the database directly — so make sure at least two people have admin accounts.
+</div>
+
+<h2>6. How syncing works</h2>
+
+<h3>6.1 Scheduled, manual and live</h3>
+
+<table>
+  <tr><th style="width:24%">Method</th><th>When it runs</th></tr>
+  <tr><td>Scheduled</td><td>Automatically every 10 minutes in production. This is the reliable baseline and should always stay on.</td></tr>
+  <tr><td>Manual</td><td><b>Sync all now</b> in the header, or <b>Sync now</b> on one device card.</td></tr>
+  <tr><td>Live capture</td><td>Optional per device. The server holds a connection open and punches appear the moment they happen. A network blip silently ends the stream, which is why the scheduled sync remains as the safety net.</td></tr>
+</table>
+
+<p>The terminals accept only one connection at a time, so the system queues its own
+requests per device. Live capture is paused automatically while a sync runs, then resumed.
+You never need to think about this.</p>
+
+<h3>6.2 Why re-syncing never duplicates</h3>
+
+<p>Each terminal hands over its complete log on every read, so the same punches arrive
+again and again. Every punch is stored under a key made of the device serial number, the
+enrollment number and the exact timestamp, so repeats are recognised and ignored. The Sync
+log tab shows this: a second sync reports many punches fetched and zero new.</p>
+
+<p>The device serial is used rather than the IP address, so a terminal that picks up a new
+address from DHCP does not start duplicating its history.</p>
+
+<h3>6.3 Device clocks</h3>
+
+<p>Terminals report the time from their own internal clock with no timezone attached, so
+the device and the server must agree. Device clocks drift, especially after a power cut.</p>
+
+<p><b>Sync clock</b> on a device card sets that terminal's clock from the server. Worth
+doing when you first install, and any time reported times look shifted.</p>
+
+<h2>7. Troubleshooting</h2>
+
+<h3 class="nobreak">The web page will not open</h3>
+<ul>
+  <li>Check the service is running: <span class="mono">systemctl status attendance</span></li>
+  <li>Check the log for the reason: <span class="mono">journalctl -u attendance -n 50</span></li>
+  <li>Confirm you are using the server's address and port 3000, not <span class="mono">localhost</span>, from another machine.</li>
+  <li>If a firewall is on, confirm the rule in section 2.4 was added.</li>
+</ul>
+
+<h3 class="nobreak">Test fails on a device</h3>
+<ol>
+  <li>Confirm the IP is right — read it from the device's own communication/network settings menu.</li>
+  <li>From the server, check it responds at all: <span class="mono">ping 192.168.1.201</span></li>
+  <li>If the test times out rather than being refused, edit the device and set <b>Connection</b> to <b>UDP only</b>. Some ESSL models answer only on UDP, and automatic fallback cannot detect that case.</li>
+  <li>Confirm nothing else is holding the terminal open — the official ESSL software keeps a connection and the device allows only one.</li>
+</ol>
+
+<h3 class="nobreak">A device stops working after a while</h3>
+<p>Usually the terminal has been left in a stuck session. Power-cycle the device, then
+press <b>Test</b>. Check the Sync log tab for the error text recorded at the time.</p>
+
+<h3 class="nobreak">Punches appear under "unmapped"</h3>
+<p>Somebody has been enrolled on a terminal but not linked to an employee here. Go to the
+Mapping tab and link the number. Past punches are attributed automatically.</p>
+
+<h3 class="nobreak">Someone shows as Absent on a day they worked</h3>
+<ul>
+  <li>Check the Punch log for that date and device — if there are no punches, the device
+  did not record them.</li>
+  <li>Check the Mapping tab: their enrollment number on <i>that particular terminal</i> may
+  not be linked, even if the others are.</li>
+  <li>Remember that weekends and holidays always show as absent.</li>
+</ul>
+
+<h3 class="nobreak">Times are wrong by hours</h3>
+<p>The device clock has drifted or is set to a different timezone. Use <b>Sync clock</b>
+on that device card.</p>
+
+<h3 class="nobreak">The service does not start after a reboot</h3>
+<p>Most often Node.js was upgraded through nvm and its folder path changed. Re-run
+<span class="mono">sudo bash scripts/install-service.sh</span>. Confirm with
+<span class="mono">journalctl -u attendance -n 30</span>.</p>
+
+<h3 class="nobreak">Everyone is locked out of logging in</h3>
+<p>Five wrong passwords on one username locks that account for 15 minutes. Wait it out, or
+restart the service to clear the counter: <span class="mono">sudo systemctl restart attendance</span>.</p>
+
+<h2>8. Security</h2>
+
+<p>Access control is enforced on the server, not just hidden in the interface. Every
+address under <span class="mono">/api</span> requires a valid session except the login,
+setup and health checks, and any change (as opposed to a read) requires an admin.</p>
+
+<ul>
+  <li>Passwords are stored using <b>scrypt</b> hashing. They are never stored or logged in
+  a readable form, and cannot be recovered from the database — only reset.</li>
+  <li>Sessions are held on the server and last 8 hours, extending while in use. Disabling
+  a user, changing their role or resetting their password ends their sessions at once.</li>
+  <li>Five failed logins on a username trigger a 15-minute lockout.</li>
+  <li>The session cookie cannot be read by page scripts and is not sent by other websites,
+  which protects against the common cross-site attacks.</li>
+</ul>
+
+<div class="danger">
+<b>Traffic is not encrypted</b>
+The system runs over plain HTTP. Passwords and session cookies cross your network in
+readable form, so anyone able to capture network traffic between a browser and the server
+could read them. This is acceptable on a trusted office network and is not acceptable over
+the internet. <b>Never forward port 3000 through your router.</b> For remote access, use a
+VPN, or place the application behind a reverse proxy with a TLS certificate.
+</div>
+
+<p>Keep the firewall rule from section 2.4 in place so only your own network can reach the
+port.</p>
+
+<h2>9. Maintenance</h2>
+
+<h3>9.1 Backups</h3>
+
+<p>Everything — employees, punches, users, device settings — lives in one file. Do not
+copy it with <span class="mono">cp</span> while the service is running: the result can be
+an inconsistent file. Use the supplied script, which takes a proper consistent snapshot
+and needs no extra software:</p>
+
+<pre>bash /home/erpdev/Attandance/scripts/backup.sh /home/erpdev/backups</pre>
+
+<p>It writes a timestamped file such as
+<span class="mono">attendance-2026-08-07-2130.db</span> and reports how many punches it
+contains. Schedule it daily with <span class="mono">cron</span>:</p>
+
+<pre>30 21 * * *  bash /home/erpdev/Attandance/scripts/backup.sh /home/erpdev/backups</pre>
+
+<p>Copy those files somewhere off this server — a failed disk takes the database and the
+backups with it. To restore, stop the service, put the file back as
+<span class="mono">data/attendance.db</span>, and start the service again.</p>
+
+<h3>9.2 Updating</h3>
+
+<pre>cd /home/erpdev/Attandance
+npm install
+sudo systemctl restart attendance</pre>
+
+<p>If the application files moved or Node.js was upgraded, re-run the service installer as
+well.</p>
+
+<h3>9.3 Resetting</h3>
+
+<div class="danger">
+<b>This destroys all attendance history</b>
+Deleting the <span class="mono">data</span> folder permanently removes every punch,
+employee, user account and device setting. It cannot be undone without a backup. The
+punches still held in the terminals' own memory can be re-read afterwards, but anything
+already cleared from the devices is gone for good.
+<pre style="margin-top:6pt;margin-bottom:0">sudo systemctl stop attendance
+rm -rf /home/erpdev/Attandance/data
+sudo systemctl start attendance</pre>
+</div>
+
+<p>The database is recreated empty on the next start, and the app returns to the
+create-first-admin screen.</p>
+
+<h2>10. Reference</h2>
+
+<h3>10.1 Commands</h3>
+
+<table>
+  <tr><th style="width:46%">Command</th><th>Purpose</th></tr>
+  <tr><td class="mono">npm install</td><td>Install dependencies</td></tr>
+  <tr><td class="mono">npm run dev</td><td>Start in development mode</td></tr>
+  <tr><td class="mono">npm start</td><td>Start in production mode manually</td></tr>
+  <tr><td class="mono">npm run seed:demo</td><td>Load demo data into the development database</td></tr>
+  <tr><td class="mono">npm test</td><td>Run the automated test suite (13 checks)</td></tr>
+  <tr><td class="mono">bash scripts/backup.sh <i>folder</i></td><td>Take a consistent database backup</td></tr>
+  <tr><td class="mono">npm run docs:build</td><td>Rebuild this guide from <span class="mono">docs/manual.html</span></td></tr>
+  <tr><td class="mono">sudo bash scripts/install-service.sh</td><td>Install and start the boot service</td></tr>
+  <tr><td class="mono">sudo bash scripts/uninstall-service.sh</td><td>Remove the service, keep the data</td></tr>
+</table>
+
+<h3>10.2 Settings</h3>
+
+<p>Edit <span class="mono">.env.production</span> (or <span class="mono">.env.development</span>),
+then restart the service.</p>
+
+<table>
+  <tr><th style="width:38%">Setting</th><th>Meaning</th></tr>
+  <tr><td class="mono">HOST</td><td><span class="mono">0.0.0.0</span> to allow access from the network, <span class="mono">127.0.0.1</span> for this machine only</td></tr>
+  <tr><td class="mono">PORT</td><td>Web port, default <span class="mono">3000</span></td></tr>
+  <tr><td class="mono">DB_PATH</td><td>Database file location. Use a full path in production.</td></tr>
+  <tr><td class="mono">POLL_INTERVAL_MINUTES</td><td>Minutes between automatic syncs; <span class="mono">0</span> disables them</td></tr>
+  <tr><td class="mono">DEVICE_TIMEOUT_SECONDS</td><td>How long to wait for a terminal before giving up</td></tr>
+  <tr><td class="mono">WORKDAY_START</td><td>Arrival after this time counts as <i>Late</i></td></tr>
+  <tr><td class="mono">WORKDAY_END</td><td>End of the working day, used for reporting</td></tr>
+  <tr><td class="mono">DUPLICATE_PUNCH_WINDOW_MINUTES</td><td>Punches this close together count as one (double-taps on the reader)</td></tr>
+</table>
+
+<h3>10.3 API endpoints</h3>
+
+<p>For integrating with payroll or an ERP. All require a session cookie obtained from
+<span class="mono">POST /api/auth/login</span>, except where marked public.</p>
+
+<table>
+  <tr><th style="width:44%">Endpoint</th><th>Purpose</th></tr>
+  <tr><td class="mono">GET /api/health</td><td>Public. Service status.</td></tr>
+  <tr><td class="mono">POST /api/auth/login</td><td>Public. Sign in, returns a session cookie.</td></tr>
+  <tr><td class="mono">GET /api/attendance?from&amp;to</td><td>Daily attendance records</td></tr>
+  <tr><td class="mono">GET /api/attendance.csv?from&amp;to</td><td>The same as a CSV download</td></tr>
+  <tr><td class="mono">GET /api/punches?from&amp;to</td><td>Individual punches</td></tr>
+  <tr><td class="mono">GET /api/dashboard</td><td>Summary counters</td></tr>
+  <tr><td class="mono">POST /api/sync</td><td>Admin. Sync every device now.</td></tr>
+  <tr><td class="mono">GET /api/devices</td><td>Devices and their health</td></tr>
+  <tr><td class="mono">GET /api/employees</td><td>Employee list</td></tr>
+  <tr><td class="mono">GET /api/events</td><td>Live stream of punches (Server-Sent Events)</td></tr>
+</table>
+
+<h3>10.4 File layout</h3>
+
+<table>
+  <tr><th style="width:38%">Path</th><th>Contents</th></tr>
+  <tr><td class="mono">data/attendance.db</td><td>All production data. Back this up.</td></tr>
+  <tr><td class="mono">.env.production</td><td>Production settings</td></tr>
+  <tr><td class="mono">.env.development</td><td>Development settings</td></tr>
+  <tr><td class="mono">backups/</td><td>Where <span class="mono">scripts/backup.sh</span> writes by default</td></tr>
+  <tr><td class="mono">scripts/</td><td>Service installer, backup script, demo data loader</td></tr>
+  <tr><td class="mono">src/</td><td>Application code</td></tr>
+  <tr><td class="mono">public/</td><td>Web interface</td></tr>
+  <tr><td class="mono">docs/</td><td>This guide</td></tr>
+  <tr><td class="mono">/etc/systemd/system/attendance.service</td><td>Boot service definition</td></tr>
+</table>
+
+<div class="note" style="margin-top:16pt">
+<b>Before trusting the first week of data</b>
+This guide describes a system that has been tested end to end against simulated terminals,
+but not against your physical ESSL hardware. For the first few days, spot-check the Punch
+log against a punch you make yourself on each terminal, and confirm the times and the
+employee name are right.
+</div>
+
+</body>
+</html>
