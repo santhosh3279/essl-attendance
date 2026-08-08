@@ -7,6 +7,7 @@ import {
   toCsv,
 } from '../services/attendanceService.js';
 import { toLocalDay } from '../lib/time.js';
+import { config } from '../config.js';
 
 export const attendanceRouter = Router();
 
@@ -27,6 +28,8 @@ attendanceRouter.get('/attendance', (req, res) => {
   res.json({
     from,
     to,
+    // The chart draws these as reference lines on its clock axis.
+    workday: { start: config.workdayStart, end: config.workdayEnd },
     ...getAttendanceGrid({
       from,
       to,

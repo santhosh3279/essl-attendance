@@ -427,22 +427,28 @@ Viewer accounts can export too.</p>
 
 <h3>4.5 Hours chart</h3>
 
-<p>The <b>Hours Chart</b> tab draws working hours as a bar chart.</p>
+<p>The <b>Hours Chart</b> tab plots attendance against a clock, so you read arrival and
+departure directly off the axis. Time runs top to bottom like a timetable, and each bar
+spans that person's first punch to their last.</p>
 
 <ul>
-  <li>Pick an <b>employee</b> and each bar is one day, so a person's week is visible at
-  a glance.</li>
-  <li>Leave the employee on <b>All</b> and each bar is one person's total hours over the
-  range, sorted highest first &mdash; useful for a monthly comparison.</li>
+  <li>Pick an <b>employee</b> and each bar is one day &mdash; their whole week of
+  arrival and departure times at a glance.</li>
+  <li>Leave the employee on <b>All</b> and each bar is one person's <i>typical</i> day:
+  the average first and last punch across the days that have both, sorted by who starts
+  earliest.</li>
 </ul>
 
-<p>A dashed outline instead of a solid bar means that day has only one punch, so the
-hours cannot be worked out. That is deliberately different from zero: absent and
-forgot-to-punch-out are not the same thing, and a chart that showed both as nothing
-would be misleading. The dashed horizontal line marks a standard working day.</p>
+<p>The actual times are printed on the bars. When a range holds too many bars for the
+labels to fit, they drop off and the times stay available on hover and in the table.</p>
 
-<p><b>Show data table</b> puts the same figures in a table underneath &mdash; use it to
-copy numbers out, or if the colours are hard to read.</p>
+<p>A short dash with a dot, instead of a bar, marks a day with only one punch: the time
+is known but the duration is not. The two dashed horizontal lines are the configured
+workday start and end, so anyone arriving above the first line or leaving below the
+second is visible immediately.</p>
+
+<p><b>Show data table</b> lists the same in and out times, the duration, and how many
+punches each row came from.</p>
 
 <h2>5. Managing users</h2>
 

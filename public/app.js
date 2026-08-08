@@ -800,15 +800,31 @@ const svgEl = (tag, attrs = {}) => {
   return node;
 };
 
-/** Bar with a 4px rounded data-end and a square baseline, per the mark spec. */
-function barPath(x, y, width, height, radius = 4) {
-  const r = Math.max(0, Math.min(radius, width / 2, height));
-  return `M${x},${y + height} L${x},${y + r} Q${x},${y} ${x + r},${y} ` +
-    `L${x + width - r},${y} Q${x + width},${y} ${x + width},${y + r} ` +
-    `L${x + width},${y + height} Z`;
+/** 'HH:MM' -> minutes past midnight. */
+const toMinutes = (clock) => {
+  if (!clock) return null;
+  const [h, m] = clock.split(':').map(Number);
+  return h * 60 + m;
+};
+
+const toClock = (minutes) => {
+  const m = Math.round(minutes);
+  return `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+};
+
+const durationText = (minutes) =>
+  `${Math.floor(minutes / 60)}h ${String(Math.round(minutes % 60)).padStart(2, '0')}m`;
+
+/** Rounded at both ends: on a clock axis both ends are data, not a baseline. */
+function capsulePath(x, y, width, height, radius = 4) {
+  const r = Math.max(0, Math.min(radius, width / 2, height / 2));
+  return `M${x + r},${y} L${x + width - r},${y} Q${x + width},${y} ${x + width},${y + r} ` +
+    `L${x + width},${y + height - r} Q${x + width},${y + height} ${x + width - r},${y + height} ` +
+    `L${x + r},${y + height} Q${x},${y + height} ${x},${y + height - r} ` +
+    `L${x},${y + r} Q${x},${y} ${x + r},${y} Z`;
 }
 
-const chartState = { bars: [], mode: 'days', target: 8 };
+const chartState = { bars: [], mode: 'days', workday: { start: '09:00', end: '18:00' } };
 
 function repQuery() {
   const params = new URLSearchParams({ from: $('#repFrom').value, to: $('#repTo').value });
@@ -820,7 +836,7 @@ loaders.report = async () => {
   await refreshEmployees();
   const select = $('#repEmployee');
   const current = select.value;
-  select.replaceChildren(el('option', { value: '' }, 'All — total hours each'));
+  select.replaceChildren(el('option', { value: '' }, 'All — typical times'));
   for (const employee of state.employees) {
     select.append(el('option', { value: employee.id }, `${employee.code} — ${employee.name}`));
   }
@@ -831,45 +847,58 @@ loaders.report = async () => {
 async function loadReport() {
   const data = await api(`/api/attendance?${repQuery()}`);
   const employeeId = $('#repEmployee').value;
+  chartState.workday = data.workday ?? chartState.workday;
 
   if (employeeId) {
-    // One employee: a day per bar, hours on the value axis.
     const rows = data.rows.filter((r) => r.employeeId === Number(employeeId));
     chartState.mode = 'days';
     chartState.bars = rows.map((r) => ({
-      label: r.day.slice(8) + '/' + r.day.slice(5, 7),
+      label: `${r.day.slice(8)}/${r.day.slice(5, 7)}`,
       full: r.day,
-      value: r.hours,
+      start: toMinutes(r.firstIn),
+      end: toMinutes(r.lastOut),
       status: r.status,
-      detail: r.firstIn ? `${r.firstIn} → ${r.lastOut ?? '—'}` : 'no punches',
       punches: r.punches,
+      devices: r.devices,
     }));
-    $('#repTitle').textContent = `Working hours — ${rows[0]?.name ?? 'employee'}`;
+    $('#repTitle').textContent = `Attendance times — ${rows[0]?.name ?? 'employee'}`;
+    $('#repCaption').textContent =
+      `${data.from} to ${data.to}. Each bar runs from the first punch to the last, merged across all devices.`;
   } else {
-    // Everyone: total hours per person over the range.
-    const totals = new Map();
+    // Averaging in/out across the range: "when does this person usually work".
+    // Only days with both punches can contribute, so the count is reported too.
+    const people = new Map();
     for (const row of data.rows) {
-      const entry = totals.get(row.employeeId) ?? { name: row.name, code: row.code, hours: 0, days: 0, incomplete: 0 };
-      if (row.hours) { entry.hours += row.hours; entry.days += 1; }
-      else if (row.status === 'incomplete') entry.incomplete += 1;
-      totals.set(row.employeeId, entry);
+      const entry = people.get(row.employeeId)
+        ?? { name: row.name, code: row.code, ins: [], outs: [], single: 0 };
+      const first = toMinutes(row.firstIn);
+      const last = toMinutes(row.lastOut);
+      if (first != null && last != null) { entry.ins.push(first); entry.outs.push(last); }
+      else if (first != null) entry.single += 1;
+      people.set(row.employeeId, entry);
     }
-    chartState.mode = 'employees';
-    chartState.bars = [...totals.values()]
-      .sort((a, b) => b.hours - a.hours)
-      .map((e) => ({
-        label: e.name.split(' ')[0].slice(0, 10),
-        full: `${e.code} — ${e.name}`,
-        value: e.hours ? Number(e.hours.toFixed(2)) : null,
-        status: e.hours ? 'ok' : 'incomplete',
-        detail: `${e.days} day(s) with in and out${e.incomplete ? `, ${e.incomplete} incomplete` : ''}`,
-        punches: e.days,
-      }));
-    $('#repTitle').textContent = 'Total working hours by employee';
-  }
+    const mean = (list) => list.reduce((sum, v) => sum + v, 0) / list.length;
 
-  $('#repCaption').textContent =
-    `${data.from} to ${data.to}. Hours are first punch to last punch, merged across all devices.`;
+    chartState.mode = 'employees';
+    chartState.bars = [...people.values()]
+      .filter((p) => p.ins.length || p.single)
+      .map((p) => ({
+        label: p.name.split(' ')[0].slice(0, 10),
+        full: `${p.code} — ${p.name}`,
+        start: p.ins.length ? mean(p.ins) : null,
+        end: p.outs.length ? mean(p.outs) : null,
+        status: p.ins.length ? 'present' : 'incomplete',
+        punches: p.ins.length,
+        days: p.ins.length,
+        single: p.single,
+      }))
+      .filter((b) => b.start != null)
+      .sort((a, b) => a.start - b.start);
+
+    $('#repTitle').textContent = 'Typical attendance times by employee';
+    $('#repCaption').textContent =
+      `${data.from} to ${data.to}. Average first and last punch across the days that have both.`;
+  }
 
   drawChart();
   renderReportTable();
@@ -879,91 +908,104 @@ function drawChart() {
   const svg = $('#repChart');
   svg.replaceChildren();
   const bars = chartState.bars;
+  $('#repLegend').replaceChildren();
 
   if (!bars.length) {
-    $('#repLegend').replaceChildren();
-    svg.append(svgEl('text', { x: 20, y: 40, class: 'viz-tick' }));
-    svg.lastChild.textContent = 'No data for this range.';
+    const message = svgEl('text', { x: 16, y: 30, class: 'viz-tick' });
+    message.textContent = 'No attendance in this range.';
+    svg.append(message);
     return;
   }
 
   const width = Math.max(svg.clientWidth || 900, 520);
-  const height = 340;
-  const margin = { top: 30, right: 16, bottom: 46, left: 48 };
+  const height = 360;
+  const margin = { top: 26, right: 16, bottom: 46, left: 52 };
   const plotW = width - margin.left - margin.right;
   const plotH = height - margin.top - margin.bottom;
   svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
 
-  // The per-day target only means something on the per-day chart; against a
-  // range total it would sit near zero and read as a threshold nobody missed.
-  const showTarget = chartState.mode === 'days';
-  const target = chartState.target;
-  const maxValue = Math.max(showTarget ? target : 0, ...bars.map((b) => b.value ?? 0), 1);
+  // Clock domain: cover the data and the configured workday, snapped to the hour
+  // with an hour of air, so bars never touch the frame.
+  const stamps = bars.flatMap((b) => [b.start, b.end]).filter((v) => v != null);
+  const workStart = toMinutes(chartState.workday.start);
+  const workEnd = toMinutes(chartState.workday.end);
+  const lo = Math.max(0, Math.floor((Math.min(...stamps, workStart) - 60) / 60) * 60);
+  const hi = Math.min(1440, Math.ceil((Math.max(...stamps, workEnd) + 60) / 60) * 60);
+  const span = Math.max(60, hi - lo);
 
-  // Round tick steps: 1.6 / 3.2 / 4.8 is nobody's idea of an axis.
-  const rough = maxValue / 5;
-  const magnitude = 10 ** Math.floor(Math.log10(rough));
-  const step = [1, 2, 2.5, 5, 10].map((m) => m * magnitude).find((s) => s >= rough) ?? 10 * magnitude;
-  const yMax = Math.ceil(maxValue / step) * step;
-  const ticks = Math.round(yMax / step);
-  const y = (value) => margin.top + plotH - (value / yMax) * plotH;
+  // Later in the day sits lower — a clock axis reads top-down like a timetable.
+  const y = (minutes) => margin.top + ((minutes - lo) / span) * plotH;
 
-  const band = plotW / bars.length;
-  const barWidth = Math.max(2, Math.min(24, band - 2)); // 2px surface gap, capped at 24
-
-  // Horizontal gridlines, hairline and recessive.
-  for (let i = 0; i <= ticks; i += 1) {
-    const value = step * i;
-    const yy = Math.round(y(value)) + 0.5;
+  const hourStep = span > 720 ? 120 : 60;
+  for (let t = lo; t <= hi; t += hourStep) {
+    const yy = Math.round(y(t)) + 0.5;
     svg.append(svgEl('line', {
       x1: margin.left, x2: width - margin.right, y1: yy, y2: yy, class: 'viz-grid-line',
     }));
     const label = svgEl('text', { x: margin.left - 8, y: yy + 4, 'text-anchor': 'end', class: 'viz-tick' });
-    label.textContent = value % 1 ? value.toFixed(1) : String(value);
+    label.textContent = toClock(t);
     svg.append(label);
   }
 
-  if (showTarget) {
-    const targetY = Math.round(y(target)) + 0.5;
+  // Workday bounds. Deliberately unlabelled on the plot: the legend names them,
+  // and an in-plot tag collides with whichever bar happens to sit at that edge.
+  for (const minutes of [workStart, workEnd]) {
+    if (minutes < lo || minutes > hi) continue;
+    const yy = Math.round(y(minutes)) + 0.5;
     svg.append(svgEl('line', {
-      x1: margin.left, x2: width - margin.right, y1: targetY, y2: targetY, class: 'viz-target',
+      x1: margin.left, x2: width - margin.right, y1: yy, y2: yy, class: 'viz-target',
     }));
   }
 
-  const axisTitle = svgEl('text', { x: 0, y: 11, class: 'viz-axis-title' });
-  axisTitle.textContent = 'HOURS';
+  const axisTitle = svgEl('text', { x: 0, y: 12, class: 'viz-axis-title' });
+  axisTitle.textContent = 'TIME OF DAY';
   svg.append(axisTitle);
 
-  const baseline = margin.top + plotH;
-  svg.append(svgEl('line', {
-    x1: margin.left, x2: width - margin.right, y1: baseline + 0.5, y2: baseline + 0.5, class: 'viz-axis-line',
-  }));
-
+  const band = plotW / bars.length;
+  const barWidth = Math.max(3, Math.min(24, band - 2)); // 2px surface gap, 24px cap
   const labelEvery = Math.ceil(bars.length / Math.floor(plotW / 46)) || 1;
+  // Only print times on the marks when they have room; the tooltip and the
+  // table carry them otherwise.
+  const showTimes = bars.length <= 16 && band >= 40;
 
   bars.forEach((bar, index) => {
     const x = margin.left + index * band + (band - barWidth) / 2;
+    const centre = margin.left + index * band + band / 2;
 
-    if (bar.value != null && bar.value > 0) {
-      const h = Math.max(2, baseline - y(bar.value));
-      svg.append(svgEl('path', { d: barPath(x, baseline - h, barWidth, h), class: 'viz-bar viz-bar-mark' }));
-    } else if (bar.status === 'incomplete') {
-      // Only one punch: hours are unknown, not zero. A dashed stub says so
-      // without pretending to a value.
-      const h = 14;
+    if (bar.start != null && bar.end != null && bar.end > bar.start) {
+      const top = y(bar.start);
+      const bottom = y(bar.end);
       svg.append(svgEl('path', {
-        d: barPath(x + 0.75, baseline - h, barWidth - 1.5, h), class: 'viz-bar-open viz-bar-mark',
+        d: capsulePath(x, top, barWidth, Math.max(4, bottom - top)), class: 'viz-bar viz-bar-mark',
       }));
+      if (showTimes) {
+        const inLabel = svgEl('text', { x: centre, y: top - 5, 'text-anchor': 'middle', class: 'viz-value' });
+        inLabel.textContent = toClock(bar.start);
+        svg.append(inLabel);
+        const outLabel = svgEl('text', { x: centre, y: bottom + 12, 'text-anchor': 'middle', class: 'viz-value' });
+        outLabel.textContent = toClock(bar.end);
+        svg.append(outLabel);
+      }
+    } else if (bar.start != null) {
+      // One punch: the time is known, the span is not. A marker at that clock
+      // position says exactly that, instead of a bar implying a duration.
+      const yy = y(bar.start);
+      svg.append(svgEl('line', {
+        x1: x - 2, x2: x + barWidth + 2, y1: yy, y2: yy, class: 'viz-single-mark',
+      }));
+      svg.append(svgEl('circle', { cx: centre, cy: yy, r: 4, class: 'viz-single-dot' }));
+      if (showTimes) {
+        const only = svgEl('text', { x: centre, y: yy - 8, 'text-anchor': 'middle', class: 'viz-value' });
+        only.textContent = toClock(bar.start);
+        svg.append(only);
+      }
     }
 
-    // Hit target spans the whole band so small bars stay easy to hover.
     const hit = svgEl('rect', {
       x: margin.left + index * band, y: margin.top, width: band, height: plotH,
       class: 'viz-bar-hit', tabindex: '0', role: 'button',
+      'aria-label': describeBar(bar),
     });
-    const describe = () =>
-      `${bar.full}: ${bar.value != null ? `${bar.value} hours` : bar.status}, ${bar.detail}`;
-    hit.setAttribute('aria-label', describe());
     hit.addEventListener('mouseenter', (event) => showVizTooltip(event, bar));
     hit.addEventListener('mousemove', (event) => showVizTooltip(event, bar));
     hit.addEventListener('mouseleave', hideVizTooltip);
@@ -973,42 +1015,54 @@ function drawChart() {
 
     if (index % labelEvery === 0) {
       const tick = svgEl('text', {
-        x: margin.left + index * band + band / 2, y: baseline + 16,
-        'text-anchor': 'middle', class: 'viz-tick',
+        x: centre, y: margin.top + plotH + 18, 'text-anchor': 'middle', class: 'viz-tick',
       });
       tick.textContent = bar.label;
       svg.append(tick);
     }
   });
 
-  // Selective direct labels: the highest bar only, never every point.
-  const peak = bars.reduce((best, b, i) => (b.value ?? 0) > (bars[best]?.value ?? 0) ? i : best, 0);
-  if (bars[peak]?.value) {
-    const value = svgEl('text', {
-      x: margin.left + peak * band + band / 2, y: y(bars[peak].value) - 6,
-      'text-anchor': 'middle', class: 'viz-value',
-    });
-    value.textContent = bars[peak].value.toFixed(1);
-    svg.append(value);
-  }
+  const baseline = margin.top + plotH;
+  svg.append(svgEl('line', {
+    x1: margin.left, x2: width - margin.right, y1: baseline + 0.5, y2: baseline + 0.5, class: 'viz-axis-line',
+  }));
 
-  const legendItems = [el('span', {}, [el('i', { className: 'viz-swatch' }), 'Hours worked'])];
-  if (bars.some((b) => b.value == null && b.status === 'incomplete')) {
-    legendItems.push(el('span', {}, [el('i', { className: 'viz-swatch open' }), 'One punch only — hours unknown']));
+  const legendItems = [
+    el('span', {}, [el('i', { className: 'viz-swatch' }), 'First punch → last punch']),
+  ];
+  if (bars.some((b) => b.start != null && b.end == null)) {
+    legendItems.push(el('span', {}, [el('i', { className: 'viz-swatch single' }), 'One punch only — time known, duration not']));
   }
-  if (showTarget) {
-    legendItems.push(el('span', {}, [el('i', { className: 'viz-swatch target' }), `Standard day (${chartState.target}h)`]));
-  }
+  legendItems.push(el('span', {}, [el('i', { className: 'viz-swatch target' }), `Workday ${chartState.workday.start}–${chartState.workday.end}`]));
   $('#repLegend').replaceChildren(...legendItems);
 }
 
+function describeBar(bar) {
+  if (bar.start != null && bar.end != null) {
+    return `${bar.full}: ${toClock(bar.start)} to ${toClock(bar.end)}, ${durationText(bar.end - bar.start)}`;
+  }
+  if (bar.start != null) return `${bar.full}: single punch at ${toClock(bar.start)}`;
+  return `${bar.full}: no punches`;
+}
+
+
 function showVizTooltip(event, bar) {
   const tip = $('#repTooltip');
-  tip.replaceChildren(
-    el('b', {}, bar.full),
-    el('div', {}, bar.value != null ? `${bar.value} hours` : 'Hours unknown'),
-    el('div', { className: 'muted' }, bar.detail),
-  );
+  const lines = [el('b', {}, bar.full)];
+  if (bar.start != null && bar.end != null) {
+    lines.push(el('div', {}, `In ${toClock(bar.start)}  →  Out ${toClock(bar.end)}`));
+    lines.push(el('div', { className: 'muted' }, durationText(bar.end - bar.start)));
+  } else if (bar.start != null) {
+    lines.push(el('div', {}, `Single punch at ${toClock(bar.start)}`));
+    lines.push(el('div', { className: 'muted' }, 'No second punch, so the duration is unknown'));
+  }
+  if (chartState.mode === 'employees') {
+    lines.push(el('div', { className: 'muted' },
+      `averaged over ${bar.days} day(s)` + (bar.single ? `, ${bar.single} with one punch` : '')));
+  } else if (bar.devices?.length) {
+    lines.push(el('div', { className: 'muted' }, bar.devices.join(', ')));
+  }
+  tip.replaceChildren(...lines);
   tip.hidden = false;
   const box = event.target.getBoundingClientRect();
   const x = (event.clientX ?? box.left + box.width / 2) + 12;
@@ -1021,10 +1075,15 @@ const hideVizTooltip = () => { $('#repTooltip').hidden = true; };
 function renderReportTable() {
   table('#repTable', [
     { label: chartState.mode === 'days' ? 'Date' : 'Employee', get: (b) => b.full },
-    { label: 'Hours', get: (b) => (b.value != null ? b.value : '—') },
-    { label: 'Detail', get: (b) => b.detail },
+    { label: chartState.mode === 'days' ? 'First punch' : 'Average in', get: (b) => (b.start != null ? toClock(b.start) : null) },
+    { label: chartState.mode === 'days' ? 'Last punch' : 'Average out', get: (b) => (b.end != null ? toClock(b.end) : null) },
+    { label: 'Duration', get: (b) => (b.start != null && b.end != null ? durationText(b.end - b.start) : null) },
+    {
+      label: chartState.mode === 'days' ? 'Punches' : 'Days averaged',
+      get: (b) => (chartState.mode === 'days' ? b.punches : b.days),
+    },
     { label: 'Status', get: (b) => pill(b.status, statusKind[b.status] || 'muted') },
-  ], chartState.bars, 'No data for this range.');
+  ], chartState.bars, 'No attendance in this range.');
 }
 
 $('#repLoadBtn').addEventListener('click', () => loadReport().catch((e) => toast(e.message, 'bad')));

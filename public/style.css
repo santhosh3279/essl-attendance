@@ -356,7 +356,7 @@ dialog input, dialog select { width: 100%; }
 
 .viz-caption { color: var(--viz-muted); font-size: 12px; margin-bottom: 10px; }
 .viz-plot { width: 100%; overflow-x: auto; }
-#repChart { display: block; width: 100%; height: 340px; min-width: 520px; }
+#repChart { display: block; width: 100%; height: 360px; min-width: 560px; }
 
 .viz-grid-line { stroke: var(--viz-grid); stroke-width: 1; shape-rendering: crispEdges; }
 .viz-axis-line { stroke: var(--viz-axis); stroke-width: 1; shape-rendering: crispEdges; }
@@ -394,3 +394,15 @@ dialog input, dialog select { width: 100%; }
 }
 .viz-tooltip b { display: block; margin-bottom: 2px; }
 .viz-empty { padding: 40px; text-align: center; color: var(--muted); }
+
+/* Single-punch marker: a time we know, with no span to draw. */
+.viz-single-mark { stroke: var(--series-1); stroke-width: 1.5; }
+.viz-single-dot { fill: var(--series-1); stroke: var(--surface-1); stroke-width: 2; }
+.viz-swatch.single {
+  background: none;
+  border: 0;
+  border-top: 2px solid var(--series-1);
+  height: 0;
+  width: 14px;
+  border-radius: 0;
+}
